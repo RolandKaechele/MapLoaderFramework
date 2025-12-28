@@ -1,0 +1,31 @@
+{
+  "name": "com.rolandkaechele.maploaderframework",
+  "displayName": "MapLoader Framework",
+  "version": "1.0.0",
+  "unity": "2022.3",
+  "description": "A flexible MapLoader Framework for Unity 2D RPGs, supporting dynamic map loading, JSON merging/override, and Lua scripting.",
+  "author": {
+    "name": "Roland Kaechele",
+    "url": "https://github.com/RolandKaechele/MapLoaderFramework"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/RolandKaechele/MapLoaderFramework.git"
+  },
+  "license": "MIT",
+  "keywords": [
+    "unity",
+    "maploader",
+    "2d",
+    "rpg",
+    "framework",
+    "json",
+    "lua",
+    "supertiled2unity"
+  ],
+  "documentationUrl": "https://github.com/RolandKaechele/MapLoaderFramework#readme"
+  ,
+  "scripts": {
+    "postinstall": "node postinstall.js"
+  }
+}

@@ -1,0 +1,29 @@
+{
+    "id": "MAP_EXAMPLE_START_TOWN",
+    "name": "Internal town",
+    "layout": "LAYOUT_INTERNAL_START_TOWN",
+    "music": "MUS_INTERNAL_TOWN",
+    "weather": "WEATHER_RAINY",
+    "map_type": "MAP_TYPE_TOWN",
+    "audio": {
+        "backgroundMusic": "internal_town_theme.mp3",
+        "ambientSounds": ["rain.ogg"]
+    },
+    "sfx": [
+        { "trigger": "find_item", "file": "item_found.wav" }
+    ],
+    "items": [
+        { "id": "antidote", "name": "Antidote", "quantity": 2 }
+    ],
+    "connections": [
+        { "mapId": "MAP_EXAMPLE_TEST_LEFT", "direction": "left" },
+        { "mapId": "MAP_EXAMPLE_TEST_RIGHT", "direction": "right" },
+        { "mapId": "MAP_EXAMPLE_TEST_UP", "direction": "up" },
+        { "mapId": "MAP_EXAMPLE_TEST_DOWN", "direction": "down" }		
+    ],
+    "object_events": [],
+    "warp_events": [],
+    "coord_events": [],
+    "bg_events": [],
+    "encounters": {}
+}

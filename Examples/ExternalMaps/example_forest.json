@@ -1,0 +1,13 @@
+{
+  "override": false,
+  "name": "Enchanted Forest",
+  "music": "enchanted_forest_theme.mp3",
+  "items": [
+    { "id": "elixir", "name": "Elixir", "quantity": 2 },
+    { "id": "magic_leaf", "name": "Magic Leaf", "quantity": 1 }
+  ],
+  "sfx": [
+    { "trigger": "magic_found", "file": "magic_found.wav" }
+  ],
+  "connectedMaps": ["MysticCave"]
+}

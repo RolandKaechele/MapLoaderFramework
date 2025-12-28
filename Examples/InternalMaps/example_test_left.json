@@ -1,0 +1,26 @@
+{
+    "id": "MAP_EXAMPLE_TEST_LEFT",
+    "name": "Test left",
+    "layout": "LAYOUT_ORIGINAL_TEST_LEFT",
+    "music": "MUS_ORIGINAL_OVERWRITE",
+    "weather": "WEATHER_RAINY",
+    "map_type": "MAP_TYPE_TEST",
+    "audio": {
+        "backgroundMusic": "original_theme.mp3",
+        "ambientSounds": ["rain.ogg"]
+    },
+    "sfx": [
+        { "trigger": "start", "file": "start.wav" }
+    ],
+    "items": [
+        { "id": "antidote", "name": "Antidote", "quantity": 1 }
+    ],
+    "connections": [
+        { "mapId": "MAP_EXAMPLE_START_TOWN", "direction": "right" }
+    ],
+    "object_events": [],
+    "warp_events": [],
+    "coord_events": [],
+    "bg_events": [],
+    "encounters": {}
+}

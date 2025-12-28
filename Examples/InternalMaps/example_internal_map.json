@@ -1,0 +1,26 @@
+{
+    "id": "MAP_EXAMPLE_TOWN",
+    "name": "Internal town",
+    "layout": "LAYOUT_INTERNAL_FOREST",
+    "music": "MUS_INTERNAL_FOREST",
+    "weather": "WEATHER_RAINY",
+    "map_type": "MAP_TYPE_FOREST",
+    "audio": {
+        "backgroundMusic": "internal_forest_theme.mp3",
+        "ambientSounds": ["rain.ogg", "birds.ogg"]
+    },
+    "sfx": [
+        { "trigger": "find_item", "file": "item_found.wav" }
+    ],
+    "items": [
+        { "id": "antidote", "name": "Antidote", "quantity": 2 }
+    ],
+    "connections": [
+        { "mapId": "MAP_OVERWRITE_TEST", "direction": "down" }
+    ],
+    "object_events": [],
+    "warp_events": [],
+    "coord_events": [],
+    "bg_events": [],
+    "encounters": {}
+}

@@ -1,0 +1,24 @@
+{
+    "id": "MAP_EXAMPLE_TOWN",
+    "name": "Example Town",
+    "layout": "LAYOUT_EXAMPLE_TOWN",
+    "music": "MUS_EXAMPLE_TOWN",
+    "weather": "WEATHER_CLEAR",
+    "map_type": "MAP_TYPE_TOWN",
+    "audio": {
+        "backgroundMusic": "example_town_theme.mp3",
+        "ambientSounds": ["birds.ogg"]
+    },
+    "sfx": [
+        { "trigger": "open_chest", "file": "chest_open.wav" }
+    ],
+    "items": [
+        { "id": "potion", "name": "Potion", "quantity": 1 }
+    ],
+    "connections": ["MAP_OVERWRITE_TEST"],
+    "object_events": [],
+    "warp_events": [],
+    "coord_events": [],
+    "bg_events": [],
+    "encounters": {}
+}

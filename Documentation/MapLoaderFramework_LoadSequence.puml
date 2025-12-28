@@ -1,0 +1,21 @@
+@startuml MapLoaderFramework_LoadSequence
+
+actor User
+participant "AutoMapLoader/MapDropdownLoader/MapLoadTrigger" as Loader
+participant MapLoaderManager
+participant MapLoaderFramework
+participant MapData
+participant ScriptManager
+
+User -> Loader: Selects or triggers map load
+Loader -> MapLoaderManager: LoadMap(mapName)
+MapLoaderManager -> MapLoaderFramework: LoadMapAndConnections(mapName)
+MapLoaderFramework -> MapData: Parse internal JSON
+MapLoaderFramework -> MapData: Parse external JSON (if exists)
+MapLoaderFramework -> MapLoaderFramework: Merge or override data
+MapLoaderFramework -> ScriptManager: Load and execute map scripts
+MapLoaderFramework -> Subscriber: OnRawJsonUpdated(mapId, rawJson)
+MapLoaderFramework -> MapLoaderManager: Map loaded and ready
+MapLoaderManager -> Loader: Notify load complete
+Loader -> User: Map loaded and ready
+@enduml

@@ -1,0 +1,27 @@
+{
+    "id": "MAP_OVERWRITE_TEST",
+    "name": "Original Overwrite Test",
+    "layout": "LAYOUT_ORIGINAL_OVERWRITE_TEST",
+    "music": "MUS_ORIGINAL_OVERWRITE",
+    "weather": "WEATHER_RAINY",
+    "map_type": "MAP_TYPE_TEST",
+    "audio": {
+        "backgroundMusic": "original_theme.mp3",
+        "ambientSounds": ["rain.ogg"]
+    },
+    "sfx": [
+        { "trigger": "start", "file": "start.wav" }
+    ],
+    "items": [
+        { "id": "antidote", "name": "Antidote", "quantity": 1 }
+    ],
+    "connections": [
+        { "mapId": "MAP_EXAMPLE_TOWN", "direction": "up" },
+        { "mapId": "MAP_EXAMPLE_START_TOWN", "direction": "left" }
+    ],
+    "object_events": [],
+    "warp_events": [],
+    "coord_events": [],
+    "bg_events": [],
+    "encounters": {}
+}

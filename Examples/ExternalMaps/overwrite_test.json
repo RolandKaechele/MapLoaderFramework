@@ -1,0 +1,25 @@
+{
+    "override": true,
+    "id": "MAP_OVERWRITE_TEST",
+    "name": "Overwritten Overwrite Test",
+    "layout": "LAYOUT_OVERWRITTEN_OVERWRITE_TEST",
+    "music": "MUS_OVERWRITTEN_OVERWRITE",
+    "weather": "WEATHER_SUNNY",
+    "map_type": "MAP_TYPE_TEST",
+    "audio": {
+        "backgroundMusic": "overwritten_theme.mp3",
+        "ambientSounds": ["birds.ogg"]
+    },
+    "sfx": [
+        { "trigger": "start", "file": "overwritten_start.wav" }
+    ],
+    "items": [
+        { "id": "super_potion", "name": "Super Potion", "quantity": 2 }
+    ],
+    "connections": ["MAP_EXAMPLE_TOWN"],
+    "object_events": [],
+    "warp_events": [],
+    "coord_events": [],
+    "bg_events": [],
+    "encounters": {}
+}

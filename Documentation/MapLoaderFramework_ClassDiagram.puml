@@ -1,0 +1,51 @@
+@startuml MapLoaderFramework_ClassDiagram
+
+
+class MapLoaderFramework {
+    +LoadMapAndConnections(mapName: string)
+    +SubscribeToRawJson(callback: Action<string, string>)
+    +UnsubscribeFromRawJson(callback: Action<string, string>)
+    +GetRawJson(mapId: string): string
+    +OnRawJsonUpdated: event Action<string, string>
+}
+
+class MapLoaderManager {
+    +LoadMap(mapName: string)
+    +GetAvailableMaps(): List<string>
+}
+
+class AutoMapLoader {
+    +defaultMapName: string
+    +Start()
+}
+
+class MapDropdownLoader {
+    +mapDropdown: Dropdown
+    +defaultMapName: string
+    +Start()
+}
+
+class MapLoadTrigger {
+    +mapToLoad: string
+    +TriggerLoad()
+}
+
+class MapData {
+    +id: string
+    +name: string
+    +music: string
+    +items: List<Item>
+}
+
+class ScriptManager {
+    +LoadScript(scriptName: string)
+    +ExecuteScript(eventName: string)
+}
+
+MapLoaderFramework <|-- MapLoaderManager
+MapLoaderManager <.. AutoMapLoader
+MapLoaderManager <.. MapDropdownLoader
+MapLoaderManager <.. MapLoadTrigger
+MapLoaderFramework --> MapData
+MapLoaderFramework --> ScriptManager
+@enduml
