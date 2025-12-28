@@ -43,3 +43,4 @@ yarn-error.log*
 /Assets/InternalMaps/
 /Assets/ExternalMaps/
 /Assets/Scripts/
+*.meta
