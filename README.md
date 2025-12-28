@@ -2,6 +2,7 @@
 
 MapLoaderFramework is a modular Unity framework for loading, managing, and integrating 2D map data (TMX maps support) extensible workflows and easy integration into your game or application projects.
 
+![Overview](Documentation/overview.png)
 
 ## Installation as a Unity Plugin
 
