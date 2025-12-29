@@ -13,6 +13,8 @@ MapLoaderManager -> MapLoaderFramework: LoadMapAndConnections(mapName)
 MapLoaderFramework -> MapData: Parse internal JSON
 MapLoaderFramework -> MapData: Parse external JSON (if exists)
 MapLoaderFramework -> MapLoaderFramework: Merge or override data
+MapLoaderFramework -> MapLoaderFramework: First pass - Recursively instantiate all map prefabs (by layout)
+MapLoaderFramework -> MapLoaderFramework: Second pass - Recursively place all maps (parent-child relationships)
 MapLoaderFramework -> ScriptManager: Load and execute map scripts
 MapLoaderFramework -> Subscriber: OnRawJsonUpdated(mapId, rawJson)
 MapLoaderFramework -> MapLoaderManager: Map loaded and ready

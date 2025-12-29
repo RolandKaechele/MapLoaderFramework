@@ -26,24 +26,20 @@ The following API allows other components to receive updates when a map's raw JS
 
 ### Events
 
-- `event Action<string, string> OnRawJsonUpdated`  
-	Triggered when a map's rawJson is loaded or updated. Parameters: `(mapId, rawJson)`.
+- `event Action<string, string> OnRawJsonUpdated` Triggered when a map's rawJson is loaded or updated. Parameters: `(mapId, rawJson)`.
 
 ### Methods
 
-- `void SubscribeToRawJson(Action<string, string> callback)`  
-	Subscribe to receive rawJson updates for all maps.
+- `void SubscribeToRawJson(Action<string, string> callback)` Subscribe to receive rawJson updates for all maps.
 
-- `void UnsubscribeFromRawJson(Action<string, string> callback)`  
-	Unsubscribe from rawJson updates.
+- `void UnsubscribeFromRawJson(Action<string, string> callback)` Unsubscribe from rawJson updates.
 
-- `string GetRawJson(string mapId)`  
-	Get the current rawJson for a loaded map by id.
+- `string GetRawJson(string mapId)` Get the current rawJson for a loaded map by id.
 
 **Usage Example:**
 
 ```csharp
 mapLoaderFrameworkInstance.SubscribeToRawJson((mapId, rawJson) => {
-		Debug.Log($"Map {mapId} updated. New rawJson: {rawJson}");
+        Debug.Log($"Map {mapId} updated. New rawJson: {rawJson}");
 });
 ```

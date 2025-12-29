@@ -1,20 +1,37 @@
-using UnityEngine;
-using System;
 using MapLoaderFramework.Runtime;
-using System.Linq;
+using System;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
+using UnityEngine;
 
 namespace MapLoaderFramework.Runtime
 {
-
     /// <summary>
     /// Core framework component for MapLoaderFramework.
     ///
-    /// When added to a GameObject, this component will automatically attach all other MapLoaderFramework runtime scripts
-    /// (such as MapLoaderManager, AutoMapLoader, MapDropdownLoader, MapLoadTrigger) to the same GameObject if they are not already present.
+    /// Loads a map and its connections by name, recursively, up to <c>mapConnectionDepth</c>.
     ///
-    /// It also provides the main entry point for loading maps and their connections via <see cref="LoadMapAndConnections"/>.
+    /// <para>
+    /// <b>How it works:</b>
+    /// <list type="number">
+    /// <item>Preloads all map JSON files from InternalMaps and ExternalMaps.</item>
+    /// <item>Destroys all previously loaded map prefabs to ensure a clean scene.</item>
+    /// <item>First pass: Recursively instantiates all map prefabs using the <c>layout</c> field (must match SuperTiled2Unity prefab name).</item>
+    /// <item>Second pass: Recursively places all maps using parent-child relationships and absolute positions.</item>
+    /// </list>
+    /// </para>
+    /// <para>
+    /// <b>Depth Control:</b> The maximum depth for loading connected maps is set by <c>mapConnectionDepth</c> (Inspector, default 2).
+    /// </para>
+    /// <para>
+    /// <b>Traversal Note:</b> Only explicit connections listed in each map's "connections" array are followed. Connections are NOT bidirectional unless both maps list each other as connections.
+    /// </para>
+    /// <para>
+    /// Called by MapLoaderManager.
+    /// </para>
     /// </summary>
+    /// <param name="mapName">The name of the map to load (without extension).</param>
 	[AddComponentMenu("MapLoaderFramework/MapLoader Framework")]
     [DisallowMultipleComponent]
     public class MapLoaderFramework : MonoBehaviour
@@ -24,6 +41,7 @@ namespace MapLoaderFramework.Runtime
 
         // Track instantiated map prefabs by map id
         private System.Collections.Generic.Dictionary<string, GameObject> instantiatedPrefabs = new System.Collections.Generic.Dictionary<string, GameObject>();
+
         // Registry for loaded maps: id -> MapRegistryEntry
         [Serializable]
         public class MapRegistryEntry
@@ -38,12 +56,53 @@ namespace MapLoaderFramework.Runtime
         // Internal map registry
         private System.Collections.Generic.Dictionary<string, MapRegistryEntry> mapRegistry = new System.Collections.Generic.Dictionary<string, MapRegistryEntry>();
 
+        /// <summary>
+        /// Maximum depth for loading connected maps (configurable in Inspector).
+        /// Controls how many levels of connected maps are loaded recursively when calling LoadMapAndConnections.
+        /// Default is 2.
+        /// </summary>
+        [SerializeField]
+        [Tooltip("Maximum depth for loading connected maps. Default is 2.")]
+        private int mapConnectionDepth = 2;
+
         // Inspector-visible list of loaded maps (read-only)
         [SerializeField] private System.Collections.Generic.List<MapData> loadedMapsInspector = new System.Collections.Generic.List<MapData>();
         // Inspector-visible list of found Lua scripts (read-only)
         [SerializeField] private System.Collections.Generic.List<string> foundLuaScriptsInspector = new System.Collections.Generic.List<string>();
         public System.Collections.Generic.IReadOnlyList<string> FoundLuaScripts => foundLuaScriptsInspector;
 
+        /// <summary>
+        /// Destroys map prefabs that are not within the allowed depth from the new root map.
+        /// Only out-of-scope (exceeded depth) map prefabs are destroyed; valid ones are preserved.
+        /// </summary>
+        private void CleanupLoadedMaps(string rootMapName, int maxDepth)
+        {
+            // Get allowed map IDs within depth
+            var allowedMapIds = GetMapIdsWithinDepth(rootMapName, maxDepth);
+            // Add corresponding layout names for each allowed map id
+            var allowed = new HashSet<string>(allowedMapIds);
+            foreach (var mapId in allowedMapIds)
+            {
+                var mapData = loadedMapsInspector.FirstOrDefault(m => m.id == mapId);
+                if (mapData != null && !string.IsNullOrEmpty(mapData.layout))
+                {
+                    allowed.Add(mapData.layout);
+                }
+            }
+            // Use the existing cleanup utility for prefab removal
+            CleanupPrefabsNotInSet(new HashSet<string>(allowed));
+
+            // Optionally, remove absolute positions for destroyed maps
+            if (_mapAbsolutePositions != null)
+            {
+                // Remove all keys from _mapAbsolutePositions that are not in allowed and not in instantiatedPrefabs
+                var absToRemove = _mapAbsolutePositions.Keys.Where(id => !allowed.Contains(id) && !instantiatedPrefabs.ContainsKey(id)).ToList();
+                foreach (var id in absToRemove)
+                {
+                    _mapAbsolutePositions.Remove(id);
+                }
+            }
+        }
 
         /// <summary>
         /// Preloads all map JSON files from InternalMaps and ExternalMaps, saving their id and JSON content in the registry and inspector list.
@@ -141,6 +200,64 @@ namespace MapLoaderFramework.Runtime
         }
 
         /// <summary>
+        /// First pass: Recursively instantiate all map prefabs by layout.
+        /// Ensures all required GameObjects exist before placement.
+        /// </summary>
+        private void InstantiateAllPrefabs(string mapName, int currentDepth, int maxDepth, HashSet<string> visited)
+        {
+            if (visited.Contains(mapName) || currentDepth > maxDepth) return;
+            visited.Add(mapName);
+            // Load map data
+            var entry = mapRegistry.Values.FirstOrDefault(e => System.IO.Path.GetFileNameWithoutExtension(e.filePath) == mapName);
+            if (entry == null) return;
+            var mapData = loadedMapsInspector.FirstOrDefault(m => m.id == entry.id);
+            if (mapData == null || string.IsNullOrEmpty(mapData.layout)) return;
+            // Prevent multiple instantiations: check both map ID and layout name
+            bool alreadyInstantiated = instantiatedPrefabs.ContainsKey(entry.id) || instantiatedPrefabs.ContainsKey(mapData.layout);
+            if (!alreadyInstantiated)
+            {
+                InstantiateTiledMap(mapData.layout);
+                entry.prefabInstantiated = true;
+            }
+            if (mapData != null && mapData.connections != null && currentDepth < maxDepth)
+            {
+                foreach (var conn in mapData.connections)
+                {
+                    if (conn == null || string.IsNullOrEmpty(conn.mapId) || string.Equals(conn.mapId, mapData.id, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    if (mapRegistry.TryGetValue(conn.mapId, out var info) && !string.IsNullOrEmpty(info.filePath))
+                    {
+                        string fileName = System.IO.Path.GetFileNameWithoutExtension(info.filePath);
+                        InstantiateAllPrefabs(fileName, currentDepth + 1, maxDepth, visited);
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Second pass: Recursively place all maps using parent-child relationships and absolute positions.
+        /// </summary>
+        private void PlaceAllMaps(string mapId, int currentDepth, int maxDepth, string parentId, GameObject parentInstance, MapConnection connection, HashSet<string> visited)
+        {
+            if (visited.Contains(mapId) || currentDepth > maxDepth) return;
+            visited.Add(mapId);
+            var mapData = loadedMapsInspector.FirstOrDefault(m => m.id == mapId);
+            if (mapData == null) return;
+            PlaceMapWithParent(mapData, connection, parentId, parentInstance);
+            if (mapData.connections != null && currentDepth < maxDepth)
+            {
+                GameObject thisInstance = null;
+                instantiatedPrefabs.TryGetValue(mapData.id, out thisInstance);
+                foreach (var conn in mapData.connections)
+                {
+                    if (conn == null || string.IsNullOrEmpty(conn.mapId) || string.Equals(conn.mapId, mapId, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    PlaceAllMaps(conn.mapId, currentDepth + 1, maxDepth, mapData.id, thisInstance, conn, visited);
+                }
+            }
+        }
+
+        /// <summary>
         /// Finds and attaches all MapLoaderFramework runtime MonoBehaviour scripts to this GameObject, except itself.
         /// This allows for easy setup by simply adding MapLoaderFramework.
         /// </summary>
@@ -181,23 +298,122 @@ namespace MapLoaderFramework.Runtime
         }
 
         /// <summary>
-        /// Loads a map and its connections by name.
-        /// Loads a map and all its connected maps by name, recursively.
+        /// Places a map relative to its parent (or at origin if no parent).
+        /// Uses the parent's absolute position and both map and parent sizes for edge-to-edge placement.
+        /// </summary>
+        private void PlaceMapWithParent(MapData mapData, MapConnection connection, string parentId, GameObject parentInstance)
+        {
+            // Get this map's prefab instance
+            GameObject thisInstance = null;
+            instantiatedPrefabs.TryGetValue(mapData.id, out thisInstance);
+            if (thisInstance == null)
+                instantiatedPrefabs.TryGetValue(mapData.layout, out thisInstance);
+            if (thisInstance == null)
+                return;
+
+            // Get parent position from _mapAbsolutePositions using parentId if available
+            Vector3 parentPosition = Vector3.zero;
+            if (!string.IsNullOrEmpty(parentId) && _mapAbsolutePositions.ContainsKey(parentId))
+            {
+                parentPosition = _mapAbsolutePositions[parentId];
+            }
+            else if (parentInstance != null)
+            {
+                parentPosition = parentInstance.transform.position;
+            }
+
+            // Get map size
+            float mapWidth = 1f, mapHeight = 1f;
+            var renderers = thisInstance.GetComponentsInChildren<Renderer>();
+            if (renderers != null && renderers.Length > 0)
+            {
+                var bounds = renderers[0].bounds;
+                foreach (var r in renderers) bounds.Encapsulate(r.bounds);
+                mapWidth = bounds.size.x;
+                mapHeight = bounds.size.y;
+            }
+
+            // Calculate offset for true edge-to-edge placement (centered origins)
+            float xOffset = 0f, yOffset = 0f;
+            // Empirically determined: using mapWidth/2 + parentWidth/10 gives correct edge-to-edge placement for these assets
+            float parentWidth = 1f, parentHeight = 1f;
+            if (parentInstance != null)
+            {
+                var parentRenderers = parentInstance.GetComponentsInChildren<Renderer>();
+                if (parentRenderers != null && parentRenderers.Length > 0)
+                {
+                    var parentBounds = parentRenderers[0].bounds;
+                    foreach (var r in parentRenderers) parentBounds.Encapsulate(r.bounds);
+                    parentWidth = parentBounds.size.x;
+                    parentHeight = parentBounds.size.y;
+                }
+            }
+            string direction = connection != null ? (connection.direction ?? "right").ToLowerInvariant() : "right";
+            switch (direction)
+            {
+                case "up":
+                    yOffset = (parentHeight / 2f) + (mapHeight / 10f);
+                    break;
+                case "down":
+                    yOffset = -((parentHeight / 2f) + (mapHeight / 10f));
+                    break;
+                case "left":
+                    xOffset = -((parentWidth / 2f) + (mapWidth / 10f));
+                    break;
+                case "right":
+                default:
+                    xOffset = (parentWidth / 2f) + (mapWidth / 10f);
+                    break;
+            }
+            Vector3 offset = new Vector3(xOffset, yOffset, 0);
+            Vector3 absPos = parentPosition + offset;
+            thisInstance.transform.position = absPos;
+            _mapAbsolutePositions[mapData.id] = absPos;
+            UnityEngine.Debug.Log($"[MapLoaderFramework] Placed map '{mapData.id}' at {absPos} (parent: {(parentInstance != null ? parentInstance.name : "none")})");
+        }
+
+        /// <summary>
+        /// <summary>
+        /// Loads a map and its connections by name, recursively, up to <c>mapConnectionDepth</c>.
         ///
-        /// This method searches for a map JSON file with the given name in both InternalMaps (StreamingAssets)
-        /// and ExternalMaps (persistentDataPath). If found, it loads and logs the contents.
-        /// Extend this method to parse the JSON and load any connected maps as needed.
-        /// This method searches for a map JSON file with the given name in both InternalMaps (Assets/InternalMaps)
-        /// and ExternalMaps (Assets/ExternalMaps). If found, it loads and parses the JSON, logs the contents, and
-        /// recursively loads any maps listed in the "connections" array of the JSON. Each connected map is loaded only if
-        /// its name is not empty and not the same as the current map.
-        ///
+        /// <para>
+        /// <b>How it works:</b>
+        /// <list type="number">
+        /// <item>Preloads all map JSON files from InternalMaps and ExternalMaps.</item>
+        /// <item>Destroys all previously loaded map prefabs to ensure a clean scene.</item>
+        /// <item>First pass: Recursively instantiates all map prefabs using the <c>layout</c> field (must match SuperTiled2Unity prefab name).</item>
+        /// <item>Second pass: Recursively places all maps using parent-child relationships and absolute positions.</item>
+        /// </list>
+        /// </para>
+        /// <para>
+        /// <b>Depth Control:</b> The maximum depth for loading connected maps is set by <c>mapConnectionDepth</c> (Inspector, default 2).
+        /// </para>
+        /// <para>
         /// Called by MapLoaderManager.
+        /// </para>
         /// </summary>
         /// <param name="mapName">The name of the map to load (without extension).</param>
         public void LoadMapAndConnections(string mapName)
         {
-            LoadMapAndConnections(mapName, 0, 1);
+            // Resolve file name to map ID before cleanup
+            string rootMapId = null;
+            var entry = mapRegistry.Values.FirstOrDefault(e => System.IO.Path.GetFileNameWithoutExtension(e.filePath) == mapName);
+            if (entry != null)
+                rootMapId = entry.id;
+            else
+                rootMapId = mapName; // fallback, may be a map id already
+            // Destroy only out-of-scope map prefabs before loading new ones
+            CleanupLoadedMaps(rootMapId, mapConnectionDepth);
+            // First pass: instantiate all prefabs recursively
+            var visitedInstantiate = new HashSet<string>();
+            InstantiateAllPrefabs(mapName, 0, mapConnectionDepth, visitedInstantiate);
+            // Second pass: place all maps recursively
+            var visitedPlace = new HashSet<string>();
+            var rootEntry = mapRegistry.Values.FirstOrDefault(e => System.IO.Path.GetFileNameWithoutExtension(e.filePath) == mapName);
+            if (rootEntry != null)
+            {
+                PlaceAllMaps(rootEntry.id, 0, mapConnectionDepth, null, null, null, visitedPlace);
+            }
         }
 
         // Internal recursive version with depth control
@@ -373,187 +589,43 @@ namespace MapLoaderFramework.Runtime
                     mapRegistry[mapData.id].prefabInstantiated = true;
                 }
 
-                // Parse JSON and load map connections as needed
-                // --- Enhanced placement logic with absolute position tracking and debug logs ---
-                // Static dictionary to track absolute positions of each map (by id)
                 if (_mapAbsolutePositions == null)
                     _mapAbsolutePositions = new System.Collections.Generic.Dictionary<string, Vector3>();
+
+                // Place the root map at origin (no parent)
+                if (currentDepth == 0)
+                {
+                    PlaceMapWithParent(mapData, null, null, null);
+                }
 
                 if (currentDepth < maxDepth)
                 {
                     try
                     {
                         UnityEngine.Debug.Log($"[MapLoaderFramework] Map '{mapName}' has {mapData.connections?.Count ?? 0} connection(s).");
-
                         if (mapData.connections != null)
                         {
-
-                            // Get this map's absolute position (default to zero if not set)
-                            Vector3 basePosition = Vector3.zero;
-                            if (_mapAbsolutePositions.TryGetValue(mapData.id, out var absPos))
-                                basePosition = absPos;
-                            else if (instantiatedPrefabs.TryGetValue(mapData.id, out var baseInstance) && baseInstance != null)
-                                basePosition = baseInstance.transform.position;
-
-                            // Ensure the prefab is at the correct position
-                            if (instantiatedPrefabs.TryGetValue(mapData.id, out var thisInstance) && thisInstance != null)
-                            {
-                                thisInstance.transform.position = basePosition;
-                                UnityEngine.Debug.Log($"[MapLoaderFramework] Placing map '{mapData.id}' at {basePosition}");
-                            }
-                            _mapAbsolutePositions[mapData.id] = basePosition;
-
-                            // 1st pass: Recursively load/initiate all connected maps
+                            // Recursively load/initiate all connected maps
                             foreach (var conn in mapData.connections)
                             {
                                 if (conn == null || string.IsNullOrEmpty(conn.mapId) || string.Equals(conn.mapId, parsedId, StringComparison.OrdinalIgnoreCase))
                                     continue;
-
-                                // If the connected map is already placed, skip
                                 if (_mapAbsolutePositions.ContainsKey(conn.mapId))
                                     continue;
-
-                                // Find the filename for this id in the registry
                                 if (mapRegistry.TryGetValue(conn.mapId, out var info) && !string.IsNullOrEmpty(info.filePath))
                                 {
                                     string fileName = System.IO.Path.GetFileNameWithoutExtension(info.filePath);
                                     UnityEngine.Debug.Log($"[MapLoaderFramework] Loading connected map by id: {conn.mapId} (filename: {fileName}), direction: {conn.direction}");
                                     LoadMapAndConnections(fileName, currentDepth + 1, maxDepth);
-                                }
-                            }
-
-                            // --- Get actual map size from prefab (current map) ---
-                            float mapWidth = 1f;
-                            float mapHeight = 1f;
-                            GameObject parentInstance = null;
-                            if (!instantiatedPrefabs.TryGetValue(mapData.id, out parentInstance) || parentInstance == null)
-                            {
-                                instantiatedPrefabs.TryGetValue(mapData.layout, out parentInstance);
-                            }
-                            if (parentInstance != null)
-                            {
-                                UnityEngine.Debug.Log($"[MapLoaderFramework] Getting size for map '{mapData.id}' from instantiated prefab.");
-                                var renderers = parentInstance.GetComponentsInChildren<Renderer>();
-                                if (renderers != null && renderers.Length > 0)
-                                {
-                                    var bounds = renderers[0].bounds;
-                                    foreach (var r in renderers) bounds.Encapsulate(r.bounds);
-                                    mapWidth = bounds.size.x;
-                                    mapHeight = bounds.size.y;
-                                    UnityEngine.Debug.Log($"[MapLoaderFramework] Detected map size for '{mapData.id}': width={mapWidth}, height={mapHeight}");
-                                }
-                                else
-                                {
-                                    UnityEngine.Debug.LogWarning($"[MapLoaderFramework] No Renderer found for map '{mapData.id}', using default size.");
-                                }
-                            }
-
-                            // 2nd pass: Calculate and set positions for all connected maps
-                            foreach (var conn in mapData.connections)
-                            {
-                                if (conn == null || string.IsNullOrEmpty(conn.mapId) || string.Equals(conn.mapId, parsedId, StringComparison.OrdinalIgnoreCase))
-                                    continue;
-
-                                // If the connected map is already placed, skip repositioning
-                                if (_mapAbsolutePositions.ContainsKey(conn.mapId))
-                                {
-                                    UnityEngine.Debug.Log($"[MapLoaderFramework] Map '{conn.mapId}' already placed at {_mapAbsolutePositions[conn.mapId]}, skipping reposition.");
-                                    continue;
-                                }
-
-                                // Find the filename for this id in the registry
-                                if (mapRegistry.TryGetValue(conn.mapId, out var info) && !string.IsNullOrEmpty(info.filePath))
-                                {
-                                    string fileName = System.IO.Path.GetFileNameWithoutExtension(info.filePath);
-
-                                    // After recursion, calculate and set the absolute position for the connected map
-                                    // (Now prefab and metadata should be available)
-                                    float connMapWidth = 1f;
-                                    float connMapHeight = 1f;
-                                    GameObject connInstance = null;
-                                    if (!instantiatedPrefabs.TryGetValue(conn.mapId, out connInstance) || connInstance == null)
+                                    // After recursion, place the connected map relative to this one
+                                    if (mapRegistry.TryGetValue(conn.mapId, out var connInfo))
                                     {
-                                        // Try by layout name if available in registry
-                                        if (mapRegistry.TryGetValue(conn.mapId, out var connReg) && !string.IsNullOrEmpty(connReg.name))
-                                        {
-                                            instantiatedPrefabs.TryGetValue(connReg.name, out connInstance);
-                                        }
+                                        var connMapData = loadedMapsInspector.FirstOrDefault(m => m.id == conn.mapId);
+                                        GameObject thisInstance = null;
+                                        instantiatedPrefabs.TryGetValue(mapData.id, out thisInstance);
+                                        if (connMapData != null)
+                                            PlaceMapWithParent(connMapData, conn, mapData.id, thisInstance);
                                     }
-                                    // Try by layout (from info) if still not found
-                                    if (connInstance == null && !string.IsNullOrEmpty(info.name))
-                                    {
-                                        instantiatedPrefabs.TryGetValue(info.name, out connInstance);
-                                    }
-                                    // Try by fileName (layout) if still not found
-                                    if (connInstance == null && !string.IsNullOrEmpty(fileName))
-                                    {
-                                        instantiatedPrefabs.TryGetValue(fileName, out connInstance);
-                                    }
-                                    if (connInstance != null)
-                                    {
-                                        var renderers = connInstance.GetComponentsInChildren<Renderer>();
-                                        if (renderers != null && renderers.Length > 0)
-                                        {
-                                            var bounds = renderers[0].bounds;
-                                            foreach (var r in renderers) bounds.Encapsulate(r.bounds);
-                                            connMapWidth = bounds.size.x;
-                                            connMapHeight = bounds.size.y;
-                                            UnityEngine.Debug.Log($"[MapLoaderFramework] (post) Detected map size for connected '{conn.mapId}': width={connMapWidth}, height={connMapHeight}");
-                                        }
-                                        else
-                                        {
-                                            UnityEngine.Debug.LogWarning($"[MapLoaderFramework] (post) No Renderer found for connected map '{conn.mapId}', using default size.");
-                                        }
-                                    }
-                                    else
-                                    {
-                                        UnityEngine.Debug.LogError($"[MapLoaderFramework] (post) Connected map prefab for '{conn.mapId}' not found, cannot determine size.");
-                                    }
-
-                                    // Calculate offset for true edge-to-edge placement (centered origins)
-                                    float xOffset = 0f;
-                                    float yOffset = 0f;
-                                    // Empirically determined: using connMapWidth/10 and connMapHeight/10 gives correct edge-to-edge placement for these assets
-                                    // If asset bounds or origins change, adjust these divisors accordingly
-                                    switch ((conn.direction ?? "").ToLowerInvariant())
-                                    {
-                                        case "up":
-                                            yOffset = (mapHeight / 2f) + (connMapHeight / 10f);
-                                            break;
-                                        case "down":
-                                            yOffset = -((mapHeight / 2f) + (connMapHeight / 10f));
-                                            break;
-                                        case "left":
-                                            xOffset = -((mapWidth / 2f) + (connMapWidth / 10f));
-                                            break;
-                                        case "right":
-                                            xOffset = (mapWidth / 2f) + (connMapWidth / 10f);
-                                            break;
-                                        default:
-                                            xOffset = (mapWidth / 2f) + (connMapWidth / 10f); // Default to right
-                                            break;
-                                    }
-                                    Vector3 offset = new Vector3(xOffset, yOffset, 0);
-                                    Vector3 connAbsPos = basePosition + offset;
-                                    _mapAbsolutePositions[conn.mapId] = connAbsPos;
-                                    if (connInstance != null)
-                                    {
-                                        connInstance.transform.position = connAbsPos;
-                                        UnityEngine.Debug.Log($"[MapLoaderFramework] Placed connected map '{conn.mapId}' at {connAbsPos}");
-                                    }
-                                    else
-                                    {
-                                        var prefabDetails = string.Join(", ", instantiatedPrefabs.Select(kvp => {
-                                            if (kvp.Value == null) return $"{kvp.Key} (instance: null)";
-                                            string path = kvp.Value.transform.parent == null ? kvp.Value.name : kvp.Value.transform.parent.name + "/" + kvp.Value.name;
-                                            return $"{kvp.Key} (instance: {kvp.Value.name}, type: {kvp.Value.GetType().Name}, active: {kvp.Value.activeSelf}, path: {path})";
-                                        }));
-                                        UnityEngine.Debug.LogError($"[MapLoaderFramework] Connected map '{conn.mapId}' prefab instance not found after loading. Instantiated prefabs: [{prefabDetails}]");
-                                    }
-                                }
-                                else
-                                {
-                                    UnityEngine.Debug.LogError($"[MapLoaderFramework] Connection id '{conn.mapId}' not found in map registry. Cannot resolve filename.");
                                 }
                             }
                         }
@@ -623,11 +695,10 @@ namespace MapLoaderFramework.Runtime
             // Instantiate the prefab at origin
             var instance = Instantiate(prefab, Vector3.zero, Quaternion.identity);
             UnityEngine.Debug.Log($"[MapLoaderFramework] Instantiated Tiled map prefab: {mapName}");
-            // Track the instance by mapName (layout) and by map id if available
+            // Track the instance by layout (mapName) and by map id if available
             instantiatedPrefabs[mapName] = instance;
-            // Try to also store by map id if different
             // Find the map id from the registry (reverse lookup by layout field)
-            var mapId = mapRegistry.FirstOrDefault(kvp => kvp.Value != null && kvp.Value.id != null && loadedMapsInspector.FirstOrDefault(m => m.id == kvp.Value.id)?.layout == mapName).Key;
+            var mapId = loadedMapsInspector.FirstOrDefault(m => m.layout == mapName)?.id;
             if (!string.IsNullOrEmpty(mapId) && mapId != mapName)
             {
                 instantiatedPrefabs[mapId] = instance;
@@ -662,7 +733,7 @@ namespace MapLoaderFramework.Runtime
             var result = new System.Collections.Generic.HashSet<string>();
             void Traverse(string mapName, int depth)
             {
-                if (depth > maxDepth) return;
+                if (depth >= maxDepth) return;
                 if (!mapRegistry.ContainsKey(mapName) || result.Contains(mapName)) return;
                 result.Add(mapName);
                 // Find connections
@@ -689,7 +760,16 @@ namespace MapLoaderFramework.Runtime
         {
             LoadMapAndConnections(mapName, 0, 1);
             // After loading, cleanup prefabs not in the allowed set
-            var allowed = GetMapIdsWithinDepth(mapName, 1);
+            var allowedMapIds = GetMapIdsWithinDepth(mapName, 1);
+            var allowed = new HashSet<string>(allowedMapIds);
+            foreach (var mapId in allowedMapIds)
+            {
+                var mapData = loadedMapsInspector.FirstOrDefault(m => m.id == mapId);
+                if (mapData != null && !string.IsNullOrEmpty(mapData.layout))
+                {
+                    allowed.Add(mapData.layout);
+                }
+            }
             CleanupPrefabsNotInSet(allowed);
         }
         public event Action<string, string> OnRawJsonUpdated; // (mapId, rawJson)

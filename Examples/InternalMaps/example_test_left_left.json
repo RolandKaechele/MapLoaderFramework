@@ -1,8 +1,8 @@
 {
-    "id": "MAP_EXAMPLE_TEST_UP",
-    "name": "Test Up",
-    "layout": "LAYOUT_ORIGINAL_TEST_UP",
-    "music": "MUS_ORIGINAL_EXAMPLE",
+    "id": "MAP_EXAMPLE_TEST_LEFT_LEFT",
+    "name": "Test left_left",
+    "layout": "LAYOUT_ORIGINAL_TEST_LEFT_LEFT",
+    "music": "MUS_ORIGINAL_OVERWRITE",
     "weather": "WEATHER_RAINY",
     "map_type": "MAP_TYPE_TEST",
     "audio": {
@@ -16,8 +16,7 @@
         { "id": "antidote", "name": "Antidote", "quantity": 1 }
     ],
     "connections": [
-        { "mapId": "MAP_EXAMPLE_START_TOWN", "direction": "down" },
-        { "mapId": "MAP_EXAMPLE_TEST_LEFT_UP", "direction": "left" }
+        { "mapId": "MAP_EXAMPLE_TEST_LEFT", "direction": "right" }
     ],
     "object_events": [],
     "warp_events": [],

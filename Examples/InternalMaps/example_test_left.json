@@ -16,7 +16,9 @@
         { "id": "antidote", "name": "Antidote", "quantity": 1 }
     ],
     "connections": [
-        { "mapId": "MAP_EXAMPLE_START_TOWN", "direction": "right" }
+        { "mapId": "MAP_EXAMPLE_START_TOWN", "direction": "right" },
+        { "mapId": "MAP_EXAMPLE_TEST_LEFT_UP", "direction": "up" },
+        { "mapId": "MAP_EXAMPLE_TEST_LEFT_LEFT", "direction": "left" }
     ],
     "object_events": [],
     "warp_events": [],
