@@ -1,6 +1,8 @@
 @startuml MapLoaderFramework_ClassDiagram
-
-
+'
+' MapLoaderFramework - Class Diagram
+' This diagram shows the main classes, their relationships, and extension points in the framework.
+'
 class MapLoaderFramework {
     +LoadMapAndConnections(mapName: string)
     +SubscribeToRawJson(callback: Action<string, string>)
@@ -35,6 +37,20 @@ class MapData {
     +name: string
     +music: string
     +items: List<Item>
+    +warp_events: List<MapWarpConnection>
+}
+
+class MapWarpConnection {
+    +id: string
+    +src_x: int
+    +src_y: int
+    +dest_map: string
+    +dest_x: int
+    +dest_y: int
+}
+
+class MapWarpLoader {
+    +HandleWarpEventMaps(...)
 }
 
 class ScriptManager {
@@ -48,4 +64,6 @@ MapLoaderManager <.. MapDropdownLoader
 MapLoaderManager <.. MapLoadTrigger
 MapLoaderFramework --> MapData
 MapLoaderFramework --> ScriptManager
+MapLoaderFramework --> MapWarpLoader
+MapData --> MapWarpConnection
 @enduml

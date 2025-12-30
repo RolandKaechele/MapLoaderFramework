@@ -1,5 +1,8 @@
 // Simple MiniJSON implementation for Unity/C#
 // Source: https://gist.github.com/darktable/1411710 (public domain)
+//
+// This file provides a lightweight JSON parser and serializer for C# and Unity projects.
+// It is used to convert between JSON strings and C# objects (Dictionary, List, etc.).
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -9,8 +12,16 @@ using System.IO;
 
 namespace MiniJSON
 {
+    /// <summary>
+    /// Provides static methods for serializing and deserializing JSON strings to and from C# objects.
+    /// </summary>
     public static class Json
     {
+        /// <summary>
+        /// Parses a JSON string and returns a C# object (Dictionary, List, string, double, etc.).
+        /// </summary>
+        /// <param name="json">The JSON string to parse.</param>
+        /// <returns>A C# object representing the JSON data.</returns>
         public static object Deserialize(string json)
         {
             if (json == null)
@@ -18,16 +29,27 @@ namespace MiniJSON
             return Parser.Parse(json);
         }
 
+        /// <summary>
+        /// Serializes a C# object (Dictionary, List, etc.) into a JSON string.
+        /// </summary>
+        /// <param name="obj">The object to serialize.</param>
+        /// <returns>A JSON string representation of the object.</returns>
         public static string Serialize(object obj)
         {
             return Serializer.Serialize(obj);
         }
 
+        /// <summary>
+        /// Internal class for parsing JSON strings into C# objects.
+        /// </summary>
         sealed class Parser : IDisposable
         {
+            // Characters that break words in JSON syntax
             const string WORD_BREAK = "{}[],:\"";
+            // StringReader for reading the JSON string
             StringReader json;
 
+            // Token types for JSON syntax
             enum TOKEN
             {
                 NONE,
@@ -44,11 +66,20 @@ namespace MiniJSON
                 NULL
             }
 
+            /// <summary>
+            /// Creates a new parser for the given JSON string.
+            /// </summary>
+            /// <param name="jsonString">The JSON string to parse.</param>
             Parser(string jsonString)
             {
                 json = new StringReader(jsonString);
             }
 
+            /// <summary>
+            /// Parses a JSON string and returns the resulting C# object.
+            /// </summary>
+            /// <param name="jsonString">The JSON string to parse.</param>
+            /// <returns>The parsed C# object.</returns>
             public static object Parse(string jsonString)
             {
                 using (var instance = new Parser(jsonString))
@@ -57,16 +88,23 @@ namespace MiniJSON
                 }
             }
 
+            /// <summary>
+            /// Disposes the parser and releases resources.
+            /// </summary>
             public void Dispose()
             {
                 json.Dispose();
                 json = null;
             }
 
+            /// <summary>
+            /// Parses a JSON object (dictionary) from the input.
+            /// </summary>
+            /// <returns>A Dictionary representing the JSON object.</returns>
             Dictionary<string, object> ParseObject()
             {
                 var table = new Dictionary<string, object>();
-                json.Read(); // {
+                json.Read(); // Consume '{'
                 while (true)
                 {
                     switch (NextToken)
@@ -76,7 +114,7 @@ namespace MiniJSON
                         case TOKEN.CURLY_CLOSE:
                             return table;
                         default:
-                            // key
+                            // Parse key
                             string name = ParseString();
                             if (NextToken != TOKEN.COLON)
                                 return null;

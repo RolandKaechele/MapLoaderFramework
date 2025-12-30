@@ -4,16 +4,38 @@ using UnityEngine;
 namespace MapLoaderFramework.Runtime
 {
     /// <summary>
-    /// Allows triggering the execution of a specific Lua script by filename at runtime.
+    /// <b>LuaScriptTrigger</b> allows triggering the execution of a specific Lua script by filename at runtime.
+    /// <para>
+    /// <b>Responsibilities:</b>
+    /// <list type="number">
+    /// <item>References a <see cref="MapLoaderManager"/> for context (optional).</item>
+    /// <item>Triggers Lua script execution by file name, typically from UI or events.</item>
+    /// </list>
+    /// </para>
+    /// <para>
+    /// <b>Usage:</b> Attach to a GameObject, set the script file name, and call <see cref="TriggerScript"/> from UI or code.
+    /// </para>
     /// </summary>
     [AddComponentMenu("MapLoaderFramework/Lua Script Trigger")]
     [DisallowMultipleComponent]
     public class LuaScriptTrigger : MonoBehaviour
     {
+
+        /// <summary>
+        /// Reference to the MapLoaderManager for context (optional, not required for script execution).
+        /// </summary>
         [SerializeField] private MapLoaderManager mapLoaderManager;
+
+        /// <summary>
+        /// The Lua script file name to execute (should be present in the Scripts folder).
+        /// </summary>
         [field: SerializeField]
         public string scriptFileName = "(None)";
 
+
+        /// <summary>
+        /// On start, ensure mapLoaderManager is assigned for context (optional).
+        /// </summary>
         void Start()
         {
             if (mapLoaderManager == null)
@@ -27,6 +49,7 @@ namespace MapLoaderFramework.Runtime
                 }
             }
         }
+
 
         /// <summary>
         /// Call this method to execute the specified Lua script (if found in the Scripts folder).

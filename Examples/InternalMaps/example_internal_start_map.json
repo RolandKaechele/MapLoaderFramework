@@ -22,7 +22,17 @@
         { "mapId": "MAP_EXAMPLE_TEST_DOWN", "direction": "down" }		
     ],
     "object_events": [],
-    "warp_events": [],
+    "warp_events": [
+        {
+            "id": "warp_to_town",
+            "src_x": 5,
+            "src_y": 2,
+            "dest_map": "MAP_EXAMPLE_HOUSE",
+            "dest_x": 10,
+            "dest_y": 8
+        }
+    ],
+
     "coord_events": [],
     "bg_events": [],
     "encounters": {}

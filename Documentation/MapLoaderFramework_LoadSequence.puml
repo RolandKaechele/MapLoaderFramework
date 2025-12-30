@@ -1,10 +1,15 @@
 @startuml MapLoaderFramework_LoadSequence
-
+'
+' MapLoaderFramework - Load Sequence Diagram
+' This diagram shows the sequence of operations when loading a map, including warp event map handling.
+'
 actor User
 participant "AutoMapLoader/MapDropdownLoader/MapLoadTrigger" as Loader
 participant MapLoaderManager
 participant MapLoaderFramework
+participant MapLoader
 participant MapData
+participant MapWarpLoader
 participant ScriptManager
 
 User -> Loader: Selects or triggers map load
@@ -13,8 +18,11 @@ MapLoaderManager -> MapLoaderFramework: LoadMapAndConnections(mapName)
 MapLoaderFramework -> MapData: Parse internal JSON
 MapLoaderFramework -> MapData: Parse external JSON (if exists)
 MapLoaderFramework -> MapLoaderFramework: Merge or override data
-MapLoaderFramework -> MapLoaderFramework: First pass - Recursively instantiate all map prefabs (by layout)
-MapLoaderFramework -> MapLoaderFramework: Second pass - Recursively place all maps (parent-child relationships)
+MapLoaderFramework -> MapLoader: Recursively instantiate all map prefabs (by layout)
+MapLoader -> MapLoader: Instantiate map prefabs for direct connections
+MapLoaderFramework -> MapLoader: Recursively place all maps (parent-child relationships)
+MapLoader -> MapLoader: Place maps for direct connections
+MapLoaderFramework -> MapWarpLoader: Handle warp event maps (instantiate/position warp destinations)
 MapLoaderFramework -> ScriptManager: Load and execute map scripts
 MapLoaderFramework -> Subscriber: OnRawJsonUpdated(mapId, rawJson)
 MapLoaderFramework -> MapLoaderManager: Map loaded and ready

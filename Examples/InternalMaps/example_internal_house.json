@@ -1,0 +1,22 @@
+{
+    "id": "MAP_EXAMPLE_HOUSE",
+    "name": "Internal House",
+    "layout": "LAYOUT_INTERNAL_HOUSE",
+    "music": "MUS_INTERNAL_HOUSE",
+    "map_type": "MAP_TYPE_FOREST",
+    "audio": {
+        "backgroundMusic": "internal_house_theme.mp3",
+        "ambientSounds": []
+    },
+    "sfx": [
+        { "trigger": "find_item", "file": "item_found.wav" }
+    ],
+    "items": [
+        { "id": "antidote", "name": "Antidote", "quantity": 2 }
+    ],
+    "connections": [],
+    "object_events": [],
+    "warp_events": [],
+    "coord_events": [],
+    "bg_events": []
+}

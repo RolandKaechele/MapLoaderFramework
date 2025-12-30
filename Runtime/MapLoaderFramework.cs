@@ -1,3 +1,4 @@
+
 using MapLoaderFramework.Runtime;
 using System;
 using System.Collections.Generic;
@@ -5,56 +6,146 @@ using System.Diagnostics;
 using System.Linq;
 using UnityEngine;
 
+
 namespace MapLoaderFramework.Runtime
 {
     /// <summary>
-    /// Core framework component for MapLoaderFramework.
-    ///
-    /// Loads a map and its connections by name, recursively, up to <c>mapConnectionDepth</c>.
-    ///
+    /// <b>MapLoaderFramework</b> is the core orchestrator for modular map loading in Unity.
     /// <para>
-    /// <b>How it works:</b>
+    /// <b>Architecture:</b> Delegates standard map loading and placement logic to <see cref="MapLoader"/>, and all warp event map logic to <see cref="MapWarpLoader"/>. Manages the overall workflow, registry, and Inspector integration.
+    /// </para>
+    /// <para>
+    /// <b>Responsibilities:</b>
     /// <list type="number">
-    /// <item>Preloads all map JSON files from InternalMaps and ExternalMaps.</item>
-    /// <item>Destroys all previously loaded map prefabs to ensure a clean scene.</item>
-    /// <item>First pass: Recursively instantiates all map prefabs using the <c>layout</c> field (must match SuperTiled2Unity prefab name).</item>
-    /// <item>Second pass: Recursively places all maps using parent-child relationships and absolute positions.</item>
+    /// <item>Preloads all map JSON files from InternalMaps and ExternalMaps, updating the registry and Inspector mirror.</item>
+    /// <item>Delegates standard map instantiation and placement to <see cref="MapLoader"/>.</item>
+    /// <item>Delegates warp event map handling and cleanup to <see cref="MapWarpLoader"/>.</item>
+    /// <item>Maintains Inspector-visible lists for diagnostics and editor tooling.</item>
+    /// <item>Provides depth control for recursive map loading via <c>mapConnectionDepth</c> (Inspector, default 2).</item>
     /// </list>
     /// </para>
     /// <para>
-    /// <b>Depth Control:</b> The maximum depth for loading connected maps is set by <c>mapConnectionDepth</c> (Inspector, default 2).
+    /// <b>Usage:</b> Add this component to a GameObject. It will ensure all required runtime scripts are attached. Use <c>LoadMapAndConnections</c> to load a map and its connections, or <c>PreloadAllMaps</c> to refresh the registry.
     /// </para>
     /// <para>
-    /// <b>Traversal Note:</b> Only explicit connections listed in each map's "connections" array are followed. Connections are NOT bidirectional unless both maps list each other as connections.
+    /// <b>Note:</b> Only explicit connections listed in each map's "connections" array are followed. Connections are NOT bidirectional unless both maps list each other as connections. Warp event destinations are handled by <see cref="MapWarpLoader"/>.
     /// </para>
     /// <para>
-    /// Called by MapLoaderManager.
+    /// <b>Delegation:</b> All map prefab instantiation, placement, and cleanup logic is handled by <see cref="MapLoader"/>. All warp event map logic is handled by <see cref="MapWarpLoader"/>. This class coordinates and manages the overall process.
     /// </para>
     /// </summary>
-    /// <param name="mapName">The name of the map to load (without extension).</param>
 	[AddComponentMenu("MapLoaderFramework/MapLoader Framework")]
     [DisallowMultipleComponent]
     public class MapLoaderFramework : MonoBehaviour
     {
+
         // --- Static dictionary for absolute map positions (cleared on PreloadAllMaps) ---
+        // Managed by MapLoaderFramework, used by MapLoader for placement.
         private static System.Collections.Generic.Dictionary<string, Vector3> _mapAbsolutePositions;
 
-        // Track instantiated map prefabs by map id
+
+        // Track instantiated map prefabs by map id or layout name.
+        // Used by MapLoader for instantiation and cleanup.
         private System.Collections.Generic.Dictionary<string, GameObject> instantiatedPrefabs = new System.Collections.Generic.Dictionary<string, GameObject>();
 
-        // Registry for loaded maps: id -> MapRegistryEntry
-        [Serializable]
-        public class MapRegistryEntry
+
+        // Internal map registry: id -> MapRegistryEntry
+        // Populated on preload, used for all map lookups.
+        private System.Collections.Generic.Dictionary<string, MapRegistryEntry> mapRegistry = new System.Collections.Generic.Dictionary<string, MapRegistryEntry>();
+
+
+        // Inspector-visible mirror of mapRegistry for debugging and tooling.
+        [SerializeField, Tooltip("Mirror of mapRegistry for Inspector view")] 
+        private List<MapRegistryEntry> mapRegistryInspector = new List<MapRegistryEntry>();
+
+
+        /// <summary>
+        /// Handles standard map loading and placement logic.
+        /// </summary>
+        private MapLoader mapLoader;
+
+
+        /// <summary>
+        /// Handles all warp event map logic and cleanup.
+        /// </summary>
+        private MapWarpLoader mapWarpLoader;
+
+
+        /// <summary>
+        /// Track last loaded map id to detect changes.
+        /// </summary>
+        private string lastLoadedMapId = null;
+
+
+        /// <summary>
+        /// Event triggered when a map's raw JSON is updated. (mapId, rawJson)
+        /// </summary>
+        public event Action<string, string> OnRawJsonUpdated;
+
+
+
+        /// <summary>
+        /// Logs all children of this GameObject when F8 is pressed at runtime for diagnostics.
+        /// </summary>
+        private void Update()
         {
-            public string id;
-            public string name;
-            public string filePath;
-            public bool prefabInstantiated = false;
-            public bool isLoaded = false;
+            // Press F8 to log all children of this GameObject
+            if (Input.GetKeyDown(KeyCode.F8))
+            {
+                UnityEngine.Debug.Log("[MapLoaderFramework] F8 pressed, logging all children");
+                LogAllChildrenOfThisGameObject();
+            }
         }
 
-        // Internal map registry
-        private System.Collections.Generic.Dictionary<string, MapRegistryEntry> mapRegistry = new System.Collections.Generic.Dictionary<string, MapRegistryEntry>();
+        /// <summary>
+        /// Initializes MapLoader and MapWarpLoader, preloads all maps, and manages Lua scripts on Awake.
+        /// </summary>
+        private void Awake()
+        {
+            UnityEngine.Debug.Log("[MapLoaderFramework] Awake called");
+            // Ensure the static absolute positions dictionary is initialized
+            if (_mapAbsolutePositions == null)
+                _mapAbsolutePositions = new Dictionary<string, Vector3>();
+            // Initialize core loader classes
+            mapLoader = new MapLoader(instantiatedPrefabs, mapRegistry, loadedMapsInspector, _mapAbsolutePositions);
+            mapWarpLoader = new MapWarpLoader(instantiatedPrefabs, mapRegistry, loadedMapsInspector, LoadMapAndConnectionsInternal);
+
+#if UNITY_EDITOR
+            if (!Application.isPlaying)
+            {
+                UnityEngine.Debug.Log("[MapLoaderFramework] Not playing in editor, adding all MapLoader components");
+                AddAllMapLoaderComponents();
+                return;
+            }
+#endif
+            UnityEngine.Debug.Log("[MapLoaderFramework] Preloading all maps");
+            PreloadAllMaps();
+            foundLuaScriptsInspector.Clear();
+            UnityEngine.Debug.Log("[MapLoaderFramework] Loading and running all Lua scripts");
+            LuaScriptLoader.LoadAndRunAllScripts(foundLuaScriptsInspector);
+            UnityEngine.Debug.Log("[MapLoaderFramework] Removing unused Lua scripts");
+            LuaScriptLoader.RemoveUnusedScripts(foundLuaScriptsInspector);
+        }
+
+        // Delegate wrapper for MapWarpLoader
+        private void LoadMapAndConnectionsInternal(string mapName, int currentDepth, int maxDepth)
+        {
+            UnityEngine.Debug.Log($"[MapLoaderFramework] LoadMapAndConnectionsInternal called for mapName={mapName}, currentDepth={currentDepth}, maxDepth={maxDepth}");
+            LoadMapAndConnections(mapName, currentDepth, maxDepth);
+        }
+
+        /// <summary>
+        /// Call this after any change to mapRegistry to update the Inspector mirror.
+        /// </summary>
+        private void UpdateMapRegistryInspector()
+        {
+            UnityEngine.Debug.Log("[MapLoaderFramework] UpdateMapRegistryInspector called");
+            mapRegistryInspector.Clear();
+            mapRegistryInspector.AddRange(mapRegistry.Values);
+        }
+
+        // Track last warp map ids for cleanup
+        private HashSet<string> _lastWarpMapIds = new HashSet<string>();
 
         /// <summary>
         /// Maximum depth for loading connected maps (configurable in Inspector).
@@ -67,6 +158,8 @@ namespace MapLoaderFramework.Runtime
 
         // Inspector-visible list of loaded maps (read-only)
         [SerializeField] private System.Collections.Generic.List<MapData> loadedMapsInspector = new System.Collections.Generic.List<MapData>();
+        // Inspector-visible list of all warp events across all maps
+        [SerializeField] private System.Collections.Generic.List<MapWarpConnection> foundWarpEventsInspector = new System.Collections.Generic.List<MapWarpConnection>();
         // Inspector-visible list of found Lua scripts (read-only)
         [SerializeField] private System.Collections.Generic.List<string> foundLuaScriptsInspector = new System.Collections.Generic.List<string>();
         public System.Collections.Generic.IReadOnlyList<string> FoundLuaScripts => foundLuaScriptsInspector;
@@ -77,6 +170,7 @@ namespace MapLoaderFramework.Runtime
         /// </summary>
         private void CleanupLoadedMaps(string rootMapName, int maxDepth)
         {
+            UnityEngine.Debug.Log($"[MapLoaderFramework] CleanupLoadedMaps called for rootMapName={rootMapName}, maxDepth={maxDepth}");
             // Get allowed map IDs within depth
             var allowedMapIds = GetMapIdsWithinDepth(rootMapName, maxDepth);
             // Add corresponding layout names for each allowed map id
@@ -89,6 +183,7 @@ namespace MapLoaderFramework.Runtime
                     allowed.Add(mapData.layout);
                 }
             }
+            UnityEngine.Debug.Log($"[MapLoaderFramework] Allowed map ids for cleanup: {string.Join(", ", allowed)}");
             // Use the existing cleanup utility for prefab removal
             CleanupPrefabsNotInSet(new HashSet<string>(allowed));
 
@@ -99,6 +194,7 @@ namespace MapLoaderFramework.Runtime
                 var absToRemove = _mapAbsolutePositions.Keys.Where(id => !allowed.Contains(id) && !instantiatedPrefabs.ContainsKey(id)).ToList();
                 foreach (var id in absToRemove)
                 {
+                    UnityEngine.Debug.Log($"[MapLoaderFramework] Removing absolute position for destroyed map id={id}");
                     _mapAbsolutePositions.Remove(id);
                 }
             }
@@ -109,61 +205,101 @@ namespace MapLoaderFramework.Runtime
         /// </summary>
         public void PreloadAllMaps()
         {
+            UnityEngine.Debug.Log("[MapLoaderFramework] PreloadAllMaps called");
             loadedMapsInspector.Clear();
+            foundWarpEventsInspector.Clear();
             mapRegistry.Clear();
+            UpdateMapRegistryInspector();
             // Clear absolute position tracking on preload
             _mapAbsolutePositions = new System.Collections.Generic.Dictionary<string, Vector3>();
             string projectPath = Application.dataPath;
             string internalDir = System.IO.Path.Combine(projectPath, "InternalMaps");
-            // Use persistentDataPath/ExternalMaps in builds, Assets/ExternalMaps in editor
-            string externalDir = null;
-            #if UNITY_EDITOR
+            string externalDir;
+#if UNITY_EDITOR
             externalDir = System.IO.Path.Combine(projectPath, "ExternalMaps");
-            #else
+#else
             externalDir = System.IO.Path.Combine(Application.persistentDataPath, "ExternalMaps");
-            #endif
-            string[] mapDirs = { internalDir, externalDir };
-            UnityEngine.Debug.Log($"[MapLoaderFramework] Project path: {projectPath}");
-            UnityEngine.Debug.Log($"[MapLoaderFramework] Internal maps directory: {internalDir}");
-            UnityEngine.Debug.Log($"[MapLoaderFramework] External maps directory: {externalDir}");
-            foreach (var dir in mapDirs)
+#endif
+            UnityEngine.Debug.Log($"[MapLoaderFramework] InternalDir: {internalDir}");
+            UnityEngine.Debug.Log($"[MapLoaderFramework] ExternalDir: {externalDir}");
+
+            // Helper to load all map JSON files from a directory
+            void LoadMapsFromDir(string dir, bool isExternal)
             {
-                UnityEngine.Debug.Log($"[MapLoaderFramework] Checking directory: {dir}");
-                if (!System.IO.Directory.Exists(dir)) {
-                    UnityEngine.Debug.Log($"[MapLoaderFramework] Directory does not exist: {dir}");
-                    continue;
-                }
-                var files = System.IO.Directory.GetFiles(dir, "*.json", System.IO.SearchOption.AllDirectories);
-                UnityEngine.Debug.Log($"[MapLoaderFramework] Found {files.Length} map file(s) in {dir}");
+                if (!System.IO.Directory.Exists(dir)) return;
+                var files = System.IO.Directory.GetFiles(dir, "*.json", System.IO.SearchOption.TopDirectoryOnly);
                 foreach (var file in files)
                 {
-                    UnityEngine.Debug.Log($"[MapLoaderFramework] Preloading map from {file}");
                     try
                     {
                         string json = System.IO.File.ReadAllText(file);
                         var mapData = JsonUtility.FromJson<MapData>(json);
-                        if (mapData != null && !string.IsNullOrEmpty(mapData.id))
+                        if (mapData != null && !string.IsNullOrEmpty(mapData.id) && !string.IsNullOrEmpty(mapData.layout))
                         {
-                            mapData.rawJson = json;
-                            UnityEngine.Debug.Log($"[MapLoaderFramework] Found map id: {mapData.id}, name: {mapData.name}");
-                            var entry = new MapRegistryEntry {
-                                id = mapData.id,
-                                name = mapData.name,
-                                filePath = file
-                            };
-                            mapRegistry[mapData.id] = entry;
-                            loadedMapsInspector.RemoveAll(m => m.id == mapData.id);
-                            loadedMapsInspector.Add(mapData);
+                            // Only add if not already present, or if external should overwrite
+                            if (!mapRegistry.ContainsKey(mapData.id) || isExternal)
+                            {
+                                var entry = new MapRegistryEntry
+                                {
+                                    id = mapData.id,
+                                    filePath = file,
+                                    prefabInstantiated = false,
+                                    isLoaded = false
+                                };
+                                mapRegistry[mapData.id] = entry;
+                                // Only add to loadedMapsInspector if not already present
+                                if (!loadedMapsInspector.Any(m => m.id == mapData.id))
+                                {
+                                    mapData.rawJson = json;
+                                    loadedMapsInspector.Add(mapData);
+                                }
+                            }
                         }
                         else
                         {
-                            UnityEngine.Debug.LogWarning($"[MapLoaderFramework] Could not parse map data or missing id in file: {file}");
+                            UnityEngine.Debug.LogWarning($"[MapLoaderFramework] Skipping invalid map JSON: {file}");
                         }
                     }
                     catch (Exception ex)
                     {
-                        UnityEngine.Debug.LogError($"[MapLoaderFramework] Failed to preload map from {file}: {ex.Message}");
+                        UnityEngine.Debug.LogError($"[MapLoaderFramework] Failed to load map JSON: {file}, error: {ex.Message}");
                     }
+                }
+            }
+
+            // Load internal maps first, then external (external can overwrite)
+            LoadMapsFromDir(internalDir, false);
+            LoadMapsFromDir(externalDir, true);
+
+            UpdateMapRegistryInspector();
+
+            // Find all maps that reference a warp event destination and call HandleWarpEventMaps for each
+            UnityEngine.Debug.Log("[MapLoaderFramework] Searching for maps referencing warp event destinations");
+            var referencingMapIds = new HashSet<string>();
+            foreach (var map in loadedMapsInspector)
+            {
+                if (map.warp_events != null)
+                {
+                    foreach (var warp in map.warp_events)
+                    {
+                        if (!string.IsNullOrEmpty(warp.dest_map))
+                        {
+                            referencingMapIds.Add(map.id);
+                            break;
+                        }
+                    }
+                }
+            }
+            if (referencingMapIds.Count == 0)
+            {
+                UnityEngine.Debug.Log("[MapLoaderFramework] No maps referencing warp event destinations found.");
+            }
+            else
+            {
+                foreach (var refId in referencingMapIds)
+                {
+                    UnityEngine.Debug.Log($"[MapLoaderFramework] Delegating warp event map loading to MapWarpLoader for referencing map: {refId}");
+                    mapWarpLoader.HandleWarpEventMaps(refId, mapConnectionDepth, GetMapIdsWithinDepth);
                 }
             }
         }
@@ -171,32 +307,36 @@ namespace MapLoaderFramework.Runtime
         /// <summary>
         /// Called when the component is first added or reset in the Inspector.
         /// Ensures all MapLoaderFramework runtime scripts are attached to this GameObject.
+        /// <summary>
+        /// Preloads all map JSON files from InternalMaps and ExternalMaps, updates the registry and Inspector lists.
+        /// Delegates warp event map loading and placement to <see cref="MapWarpLoader"/>.
         /// </summary>
         void Reset()
         {
+            UnityEngine.Debug.Log("[MapLoaderFramework] Reset called");
             AddAllMapLoaderComponents();
         }
 
         /// <summary>
-        /// Ensures all MapLoaderFramework runtime scripts are attached in edit mode as well as at runtime.
+        /// Logs all children of the MapLoaderFramework GameObject at runtime for diagnostics.
         /// </summary>
-        void Awake()
+        private void LogAllChildrenOfThisGameObject()
         {
-            #if UNITY_EDITOR
-            // In edit mode, ensure all components are present
-            if (!Application.isPlaying)
+            UnityEngine.Debug.Log("[MapLoaderFramework] LogAllChildrenOfThisGameObject called");
+            // Recursively log all descendants with their full hierarchy paths
+            void LogDescendants(Transform current, string path)
             {
-                AddAllMapLoaderComponents();
-                return;
+                int childCount = current.childCount;
+                for (int i = 0; i < childCount; i++)
+                {
+                    var child = current.GetChild(i);
+                    string childPath = string.IsNullOrEmpty(path) ? child.name : path + "/" + child.name;
+                    UnityEngine.Debug.Log($"[MapLoaderFramework] Child: {childPath} (active: {child.gameObject.activeSelf}, inHierarchy: {child.gameObject.activeInHierarchy})");
+                    LogDescendants(child, childPath);
+                }
             }
-            #endif
-            // In play mode, preload all maps at startup
-            PreloadAllMaps();
-            // Load all external Lua scripts into memory and update inspector list
-            foundLuaScriptsInspector.Clear();
-            LuaScriptLoader.LoadAndRunAllScripts(foundLuaScriptsInspector);
-            // Remove any Lua scripts from memory that are not needed for the active and connected maps
-            LuaScriptLoader.RemoveUnusedScripts(foundLuaScriptsInspector);
+            UnityEngine.Debug.Log($"[MapLoaderFramework] Logging all descendants of {this.gameObject.name}:");
+            LogDescendants(this.transform, this.gameObject.name);
         }
 
         /// <summary>
@@ -205,17 +345,28 @@ namespace MapLoaderFramework.Runtime
         /// </summary>
         private void InstantiateAllPrefabs(string mapName, int currentDepth, int maxDepth, HashSet<string> visited)
         {
-            if (visited.Contains(mapName) || currentDepth > maxDepth) return;
+            UnityEngine.Debug.Log($"[MapLoaderFramework] InstantiateAllPrefabs called for mapName={mapName}, currentDepth={currentDepth}, maxDepth={maxDepth}");
+            if (visited.Contains(mapName) || currentDepth > maxDepth) {
+                UnityEngine.Debug.Log($"[MapLoaderFramework] Skipping {mapName} (already visited or depth exceeded)");
+                return;
+            }
             visited.Add(mapName);
             // Load map data
             var entry = mapRegistry.Values.FirstOrDefault(e => System.IO.Path.GetFileNameWithoutExtension(e.filePath) == mapName);
-            if (entry == null) return;
+            if (entry == null) {
+                UnityEngine.Debug.Log($"[MapLoaderFramework] No registry entry found for {mapName}");
+                return;
+            }
             var mapData = loadedMapsInspector.FirstOrDefault(m => m.id == entry.id);
-            if (mapData == null || string.IsNullOrEmpty(mapData.layout)) return;
+            if (mapData == null || string.IsNullOrEmpty(mapData.layout)) {
+                UnityEngine.Debug.Log($"[MapLoaderFramework] No mapData or layout for {mapName}");
+                return;
+            }
             // Prevent multiple instantiations: check both map ID and layout name
             bool alreadyInstantiated = instantiatedPrefabs.ContainsKey(entry.id) || instantiatedPrefabs.ContainsKey(mapData.layout);
             if (!alreadyInstantiated)
             {
+                UnityEngine.Debug.Log($"[MapLoaderFramework] Instantiating tiled map for layout {mapData.layout}");
                 InstantiateTiledMap(mapData.layout);
                 entry.prefabInstantiated = true;
             }
@@ -228,6 +379,7 @@ namespace MapLoaderFramework.Runtime
                     if (mapRegistry.TryGetValue(conn.mapId, out var info) && !string.IsNullOrEmpty(info.filePath))
                     {
                         string fileName = System.IO.Path.GetFileNameWithoutExtension(info.filePath);
+                        UnityEngine.Debug.Log($"[MapLoaderFramework] Recursively instantiating connected map {fileName}");
                         InstantiateAllPrefabs(fileName, currentDepth + 1, maxDepth, visited);
                     }
                 }
@@ -236,14 +388,24 @@ namespace MapLoaderFramework.Runtime
 
         /// <summary>
         /// Second pass: Recursively place all maps using parent-child relationships and absolute positions.
+        /// <summary>
+        /// Delegates to <see cref="MapLoader"/>: Recursively instantiate all map prefabs by layout.
+        /// Ensures all required GameObjects exist before placement.
         /// </summary>
         private void PlaceAllMaps(string mapId, int currentDepth, int maxDepth, string parentId, GameObject parentInstance, MapConnection connection, HashSet<string> visited)
         {
-            if (visited.Contains(mapId) || currentDepth > maxDepth) return;
+            UnityEngine.Debug.Log($"[MapLoaderFramework] PlaceAllMaps called for mapId={mapId}, currentDepth={currentDepth}, maxDepth={maxDepth}, parentId={parentId}");
+            if (visited.Contains(mapId) || currentDepth > maxDepth) {
+                UnityEngine.Debug.Log($"[MapLoaderFramework] Skipping {mapId} (already visited or depth exceeded)");
+                return;
+            }
             visited.Add(mapId);
             var mapData = loadedMapsInspector.FirstOrDefault(m => m.id == mapId);
-            if (mapData == null) return;
-            PlaceMapWithParent(mapData, connection, parentId, parentInstance);
+            if (mapData == null) {
+                UnityEngine.Debug.Log($"[MapLoaderFramework] No mapData found for {mapId}");
+                return;
+            }
+            mapLoader.PlaceMapWithParent(mapData, connection, parentId, parentInstance);
             if (mapData.connections != null && currentDepth < maxDepth)
             {
                 GameObject thisInstance = null;
@@ -252,6 +414,7 @@ namespace MapLoaderFramework.Runtime
                 {
                     if (conn == null || string.IsNullOrEmpty(conn.mapId) || string.Equals(conn.mapId, mapId, StringComparison.OrdinalIgnoreCase))
                         continue;
+                    UnityEngine.Debug.Log($"[MapLoaderFramework] Recursively placing connected map {conn.mapId}");
                     PlaceAllMaps(conn.mapId, currentDepth + 1, maxDepth, mapData.id, thisInstance, conn, visited);
                 }
             }
@@ -260,9 +423,12 @@ namespace MapLoaderFramework.Runtime
         /// <summary>
         /// Finds and attaches all MapLoaderFramework runtime MonoBehaviour scripts to this GameObject, except itself.
         /// This allows for easy setup by simply adding MapLoaderFramework.
+        /// <summary>
+        /// Delegates to <see cref="MapLoader"/>: Recursively place all maps using parent-child relationships and absolute positions.
         /// </summary>
         private void AddAllMapLoaderComponents()
         {
+            UnityEngine.Debug.Log("[MapLoaderFramework] AddAllMapLoaderComponents called");
             var thisType = this.GetType();
             var assembly = thisType.Assembly;
             var runtimeNamespace = "MapLoaderFramework.Runtime";
@@ -275,6 +441,7 @@ namespace MapLoaderFramework.Runtime
             var managerType = allTypes.FirstOrDefault(t => t.Name == "MapLoaderManager");
             if (managerType != null && this.GetComponent(managerType) == null)
             {
+                UnityEngine.Debug.Log("[MapLoaderFramework] Adding MapLoaderManager component");
                 this.gameObject.AddComponent(managerType);
             }
 
@@ -282,6 +449,7 @@ namespace MapLoaderFramework.Runtime
             var autoLoaderType = allTypes.FirstOrDefault(t => t.Name == "AutoMapLoader");
             if (autoLoaderType != null && this.GetComponent(autoLoaderType) == null)
             {
+                UnityEngine.Debug.Log("[MapLoaderFramework] Adding AutoMapLoader component");
                 this.gameObject.AddComponent(autoLoaderType);
             }
 
@@ -291,110 +459,22 @@ namespace MapLoaderFramework.Runtime
                 if (type == managerType || type == autoLoaderType) continue;
                 if (this.GetComponent(type) == null)
                 {
+                    UnityEngine.Debug.Log($"[MapLoaderFramework] Adding {type.Name} component (disabled by default)");
                     var comp = this.gameObject.AddComponent(type) as MonoBehaviour;
                     if (comp != null) comp.enabled = false;
                 }
             }
         }
 
-        /// <summary>
-        /// Places a map relative to its parent (or at origin if no parent).
-        /// Uses the parent's absolute position and both map and parent sizes for edge-to-edge placement.
-        /// </summary>
-        private void PlaceMapWithParent(MapData mapData, MapConnection connection, string parentId, GameObject parentInstance)
-        {
-            // Get this map's prefab instance
-            GameObject thisInstance = null;
-            instantiatedPrefabs.TryGetValue(mapData.id, out thisInstance);
-            if (thisInstance == null)
-                instantiatedPrefabs.TryGetValue(mapData.layout, out thisInstance);
-            if (thisInstance == null)
-                return;
 
-            // Get parent position from _mapAbsolutePositions using parentId if available
-            Vector3 parentPosition = Vector3.zero;
-            if (!string.IsNullOrEmpty(parentId) && _mapAbsolutePositions.ContainsKey(parentId))
-            {
-                parentPosition = _mapAbsolutePositions[parentId];
-            }
-            else if (parentInstance != null)
-            {
-                parentPosition = parentInstance.transform.position;
-            }
-
-            // Get map size
-            float mapWidth = 1f, mapHeight = 1f;
-            var renderers = thisInstance.GetComponentsInChildren<Renderer>();
-            if (renderers != null && renderers.Length > 0)
-            {
-                var bounds = renderers[0].bounds;
-                foreach (var r in renderers) bounds.Encapsulate(r.bounds);
-                mapWidth = bounds.size.x;
-                mapHeight = bounds.size.y;
-            }
-
-            // Calculate offset for true edge-to-edge placement (centered origins)
-            float xOffset = 0f, yOffset = 0f;
-            // Empirically determined: using mapWidth/2 + parentWidth/10 gives correct edge-to-edge placement for these assets
-            float parentWidth = 1f, parentHeight = 1f;
-            if (parentInstance != null)
-            {
-                var parentRenderers = parentInstance.GetComponentsInChildren<Renderer>();
-                if (parentRenderers != null && parentRenderers.Length > 0)
-                {
-                    var parentBounds = parentRenderers[0].bounds;
-                    foreach (var r in parentRenderers) parentBounds.Encapsulate(r.bounds);
-                    parentWidth = parentBounds.size.x;
-                    parentHeight = parentBounds.size.y;
-                }
-            }
-            string direction = connection != null ? (connection.direction ?? "right").ToLowerInvariant() : "right";
-            switch (direction)
-            {
-                case "up":
-                    yOffset = (parentHeight / 2f) + (mapHeight / 10f);
-                    break;
-                case "down":
-                    yOffset = -((parentHeight / 2f) + (mapHeight / 10f));
-                    break;
-                case "left":
-                    xOffset = -((parentWidth / 2f) + (mapWidth / 10f));
-                    break;
-                case "right":
-                default:
-                    xOffset = (parentWidth / 2f) + (mapWidth / 10f);
-                    break;
-            }
-            Vector3 offset = new Vector3(xOffset, yOffset, 0);
-            Vector3 absPos = parentPosition + offset;
-            thisInstance.transform.position = absPos;
-            _mapAbsolutePositions[mapData.id] = absPos;
-            UnityEngine.Debug.Log($"[MapLoaderFramework] Placed map '{mapData.id}' at {absPos} (parent: {(parentInstance != null ? parentInstance.name : "none")})");
-        }
-
-        /// <summary>
         /// <summary>
         /// Loads a map and its connections by name, recursively, up to <c>mapConnectionDepth</c>.
-        ///
-        /// <para>
-        /// <b>How it works:</b>
-        /// <list type="number">
-        /// <item>Preloads all map JSON files from InternalMaps and ExternalMaps.</item>
-        /// <item>Destroys all previously loaded map prefabs to ensure a clean scene.</item>
-        /// <item>First pass: Recursively instantiates all map prefabs using the <c>layout</c> field (must match SuperTiled2Unity prefab name).</item>
-        /// <item>Second pass: Recursively places all maps using parent-child relationships and absolute positions.</item>
-        /// </list>
-        /// </para>
-        /// <para>
-        /// <b>Depth Control:</b> The maximum depth for loading connected maps is set by <c>mapConnectionDepth</c> (Inspector, default 2).
-        /// </para>
-        /// <para>
-        /// Called by MapLoaderManager.
-        /// </para>
+        /// Delegates instantiation and placement to <see cref="MapLoader"/> and warp event map handling to <see cref="MapWarpLoader"/>.
         /// </summary>
         /// <param name="mapName">The name of the map to load (without extension).</param>
         public void LoadMapAndConnections(string mapName)
         {
+            UnityEngine.Debug.Log($"[MapLoaderFramework] LoadMapAndConnections called for mapName={mapName}");
             // Resolve file name to map ID before cleanup
             string rootMapId = null;
             var entry = mapRegistry.Values.FirstOrDefault(e => System.IO.Path.GetFileNameWithoutExtension(e.filePath) == mapName);
@@ -402,6 +482,7 @@ namespace MapLoaderFramework.Runtime
                 rootMapId = entry.id;
             else
                 rootMapId = mapName; // fallback, may be a map id already
+            UnityEngine.Debug.Log($"[MapLoaderFramework] Resolved rootMapId={rootMapId}");
             // Destroy only out-of-scope map prefabs before loading new ones
             CleanupLoadedMaps(rootMapId, mapConnectionDepth);
             // First pass: instantiate all prefabs recursively
@@ -412,13 +493,18 @@ namespace MapLoaderFramework.Runtime
             var rootEntry = mapRegistry.Values.FirstOrDefault(e => System.IO.Path.GetFileNameWithoutExtension(e.filePath) == mapName);
             if (rootEntry != null)
             {
+                UnityEngine.Debug.Log($"[MapLoaderFramework] Placing all maps for rootEntry.id={rootEntry.id}");
                 PlaceAllMaps(rootEntry.id, 0, mapConnectionDepth, null, null, null, visitedPlace);
             }
+
+            UnityEngine.Debug.Log($"[MapLoaderFramework] Handling warp event maps for rootMapId={rootMapId}");
+            mapWarpLoader.HandleWarpEventMaps(rootMapId, mapConnectionDepth, GetMapIdsWithinDepth);
         }
 
         // Internal recursive version with depth control
         private void LoadMapAndConnections(string mapName, int currentDepth, int maxDepth)
         {
+            UnityEngine.Debug.Log($"[MapLoaderFramework] LoadMapAndConnections (internal recursive) called for mapName={mapName}, currentDepth={currentDepth}, maxDepth={maxDepth}");
             // Prevent duplicate loading by id
             string parsedId = null;
 
@@ -436,8 +522,6 @@ namespace MapLoaderFramework.Runtime
 
             string chosenJson = null;
             string chosenLayout = null;
-            string chosenSource = null;
-
 
             // Try external JSON first
             MapData extData = null;
@@ -448,9 +532,9 @@ namespace MapLoaderFramework.Runtime
 
             if (System.IO.File.Exists(mapPathExternal))
             {
+                UnityEngine.Debug.Log($"[MapLoaderFramework] Found external map JSON at {mapPathExternal}");
                 extJson = System.IO.File.ReadAllText(mapPathExternal);
                 chosenJson = extJson;
-                chosenSource = "External";
                 extData = JsonUtility.FromJson<MapData>(extJson);
                 if (extData != null && !string.IsNullOrEmpty(extData.layout))
                 {
@@ -473,118 +557,39 @@ namespace MapLoaderFramework.Runtime
 
             if (System.IO.File.Exists(mapPathInternal))
             {
+                UnityEngine.Debug.Log($"[MapLoaderFramework] Found internal map JSON at {mapPathInternal}");
                 intJson = System.IO.File.ReadAllText(mapPathInternal);
                 intData = JsonUtility.FromJson<MapData>(intJson);
-                if (intData != null && !string.IsNullOrEmpty(intData.layout))
-                {
-                    if (string.IsNullOrEmpty(chosenLayout))
-                    {
-                        chosenLayout = intData.layout;
-                        if (chosenJson == null)
-                        {
-                            chosenJson = intJson;
-                            chosenSource = "Internal";
-                        }
-                    }
-                }
             }
 
-            // Merge internal into external if needed
-            if (extData != null && intData != null && !overwrite)
-            {
-                // For each field in intData, if extData's field is null or default, copy from intData
-                var extType = typeof(MapData);
-                foreach (var field in extType.GetFields())
-                {
-                    var extVal = field.GetValue(extData);
-                    var intVal = field.GetValue(intData);
-                    if ((extVal == null || (extVal is string s && string.IsNullOrEmpty(s))) && intVal != null)
-                    {
-                        field.SetValue(extData, intVal);
-                    }
-                }
+            // Choose which mapData to use: prefer intData if valid, else extData
 
-                // Merge raw JSONs for rawJson property
-                System.Collections.Generic.Dictionary<string, object> extDict = null;
-                System.Collections.Generic.Dictionary<string, object> intDict = null;
-                try {
-                    extDict = MiniJSON.Json.Deserialize(extJson) as System.Collections.Generic.Dictionary<string, object>;
-                } catch { }
-                try {
-                    intDict = MiniJSON.Json.Deserialize(intJson) as System.Collections.Generic.Dictionary<string, object>;
-                } catch { }
-                if (extDict != null && intDict != null)
-                {
-                    foreach (var kvp in intDict)
-                    {
-                        if (!extDict.ContainsKey(kvp.Key) || extDict[kvp.Key] == null || (extDict[kvp.Key] is string s && string.IsNullOrEmpty(s)))
-                        {
-                            extDict[kvp.Key] = kvp.Value;
-                        }
-                    }
-                    // Use merged extData as chosenJson
-                    chosenJson = JsonUtility.ToJson(extData);
-                    // Set merged rawJson
-                    extData.rawJson = MiniJSON.Json.Serialize(extDict);
-                }
-                else
-                {
-                    // Fallback: just use extJson
-                    chosenJson = JsonUtility.ToJson(extData);
-                    extData.rawJson = extJson;
-                }
-                chosenSource = "External+Internal";
+            MapData mapData = null;
+            if (intData != null && !string.IsNullOrEmpty(intData.layout))
+            {
+                UnityEngine.Debug.Log($"[MapLoaderFramework] Using internal map data for {mapName}");
+                mapData = intData;
+            }
+            else if (extData != null && !string.IsNullOrEmpty(extData.layout))
+            {
+                UnityEngine.Debug.Log($"[MapLoaderFramework] Using external map data for {mapName}");
+                mapData = extData;
             }
 
-            if (chosenJson != null)
+            if (mapData != null)
             {
-                var mapData = JsonUtility.FromJson<MapData>(chosenJson);
-                if (mapData == null || string.IsNullOrEmpty(mapData.id) || string.IsNullOrEmpty(mapData.layout))
+                // Fire event if map changed
+                if (lastLoadedMapId != mapData.id)
                 {
-                    UnityEngine.Debug.LogError($"[MapLoaderFramework] Could not extract valid map data from JSON for '{mapName}'.");
-                    return;
+                    UnityEngine.Debug.Log($"[MapLoaderFramework] Map changed: firing OnRawJsonUpdated for id={mapData.id}");
+                    OnRawJsonUpdated?.Invoke(mapData.id, mapData.rawJson);
+                    lastLoadedMapId = mapData.id;
                 }
-                // If merged, use extData.rawJson if available
-                if (extData != null && intData != null && !overwrite && extData.rawJson != null)
-                {
-                    mapData.rawJson = extData.rawJson;
-                }
-                else
-                {
-                    mapData.rawJson = chosenJson;
-                }
-                parsedId = mapData.id;
-
-                bool alreadyInRegistry = mapRegistry.ContainsKey(parsedId);
-                if (alreadyInRegistry && mapRegistry[parsedId].isLoaded)
-                {
-                    UnityEngine.Debug.Log($"[MapLoaderFramework] Map id '{parsedId}' already fully loaded. Skipping to prevent recursion.");
-                    return;
-                }
-                if (!alreadyInRegistry)
-                {
-                    // Register map info and update inspector
-                    mapRegistry[mapData.id] = new MapRegistryEntry {
-                        id = mapData.id,
-                        name = mapData.name,
-                        filePath = chosenSource == "External" ? mapPathExternal : mapPathInternal,
-                        prefabInstantiated = false,
-                        isLoaded = false
-                    };
-                    loadedMapsInspector.RemoveAll(m => m.id == mapData.id);
-                    loadedMapsInspector.Add(mapData);
-
-                    // Notify subscribers
-                    if (OnRawJsonUpdated != null)
-                    {
-                        OnRawJsonUpdated(mapData.id, mapData.rawJson);
-                    }
-                }
-                // Mark as loading to prevent recursion
                 mapRegistry[mapData.id].isLoaded = true;
                 // Instantiate the Tiled map prefab if not already instantiated
                 if (!mapRegistry[mapData.id].prefabInstantiated)
                 {
+                    UnityEngine.Debug.Log($"[MapLoaderFramework] Instantiating prefab for map id '{mapData.id}' with layout '{mapData.layout}' (LoadMapAndConnections)");
                     InstantiateTiledMap(mapData.layout);
                     mapRegistry[mapData.id].prefabInstantiated = true;
                 }
@@ -595,7 +600,8 @@ namespace MapLoaderFramework.Runtime
                 // Place the root map at origin (no parent)
                 if (currentDepth == 0)
                 {
-                    PlaceMapWithParent(mapData, null, null, null);
+                    UnityEngine.Debug.Log($"[MapLoaderFramework] Placing root map at origin for id={mapData.id}");
+                    mapLoader.PlaceMapWithParent(mapData, null, null, null);
                 }
 
                 if (currentDepth < maxDepth)
@@ -624,7 +630,7 @@ namespace MapLoaderFramework.Runtime
                                         GameObject thisInstance = null;
                                         instantiatedPrefabs.TryGetValue(mapData.id, out thisInstance);
                                         if (connMapData != null)
-                                            PlaceMapWithParent(connMapData, conn, mapData.id, thisInstance);
+                                            mapLoader.PlaceMapWithParent(connMapData, conn, mapData.id, thisInstance);
                                     }
                                 }
                             }
@@ -665,10 +671,15 @@ namespace MapLoaderFramework.Runtime
         /// <summary>
         /// Loads and instantiates a Tiled map prefab using SuperTiled2Unity.
         /// Looks for a prefab named after the map in Assets/InternalMaps.
+        /// <summary>
+        /// Destroys map prefabs that are not within the allowed depth from the new root map.
+        /// Only out-of-scope (exceeded depth) map prefabs are destroyed; valid ones are preserved.
+        /// Delegates prefab removal to <see cref="MapLoader"/> utility methods.
         /// </summary>
         /// <param name="mapName">The name of the map (without extension).</param>
         private void InstantiateTiledMap(string mapName)
         {
+            UnityEngine.Debug.Log($"[MapLoaderFramework] InstantiateTiledMap called for mapName={mapName}");
             // Try InternalMaps first
             string prefabPathInternal = $"InternalMaps/{mapName}";
             UnityEngine.Debug.Log($"[MapLoaderFramework] Attempting to load prefab at path: Resources/{prefabPathInternal}");
@@ -692,15 +703,18 @@ namespace MapLoaderFramework.Runtime
             {
                 UnityEngine.Debug.Log($"[MapLoaderFramework] Successfully loaded prefab from Resources/{prefabPathInternal}");
             }
-            // Instantiate the prefab at origin
-            var instance = Instantiate(prefab, Vector3.zero, Quaternion.identity);
-            UnityEngine.Debug.Log($"[MapLoaderFramework] Instantiated Tiled map prefab: {mapName}");
+            // Instantiate the prefab at origin and parent it to this GameObject
+            var instance = Instantiate(prefab, Vector3.zero, Quaternion.identity, this.transform);
+            UnityEngine.Debug.Log($"[MapLoaderFramework] Instantiated Tiled map prefab: {mapName} (parent: {this.gameObject.name}), instance name: {instance.name}, activeInHierarchy: {instance.activeInHierarchy}, scene: {instance.scene.name}");
+            // Diagnostic: List all children of this GameObject after instantiation
+            LogAllChildrenOfThisGameObject();
             // Track the instance by layout (mapName) and by map id if available
             instantiatedPrefabs[mapName] = instance;
             // Find the map id from the registry (reverse lookup by layout field)
             var mapId = loadedMapsInspector.FirstOrDefault(m => m.layout == mapName)?.id;
             if (!string.IsNullOrEmpty(mapId) && mapId != mapName)
             {
+                UnityEngine.Debug.Log($"[MapLoaderFramework] Also tracking instance by mapId={mapId}");
                 instantiatedPrefabs[mapId] = instance;
             }
         }
@@ -710,12 +724,18 @@ namespace MapLoaderFramework.Runtime
         /// </summary>
         private void CleanupPrefabsNotInSet(System.Collections.Generic.HashSet<string> allowedMapIds)
         {
+            UnityEngine.Debug.Log($"[MapLoaderFramework] CleanupPrefabsNotInSet called. AllowedMapIds: {string.Join(", ", allowedMapIds)}");
             var toRemove = instantiatedPrefabs.Keys.Where(id => !allowedMapIds.Contains(id)).ToList();
             foreach (var id in toRemove)
             {
                 if (instantiatedPrefabs[id] != null)
                 {
+                    UnityEngine.Debug.Log($"[MapLoaderFramework] Destroying and uninitializing prefab for map id/layout '{id}' (CleanupPrefabsNotInSet)");
                     Destroy(instantiatedPrefabs[id]);
+                }
+                else
+                {
+                    UnityEngine.Debug.Log($"[MapLoaderFramework] Removing uninitialized/null prefab reference for map id/layout '{id}' (CleanupPrefabsNotInSet)");
                 }
                 instantiatedPrefabs.Remove(id);
                 if (mapRegistry.ContainsKey(id))
@@ -730,7 +750,13 @@ namespace MapLoaderFramework.Runtime
         /// </summary>
         private System.Collections.Generic.HashSet<string> GetMapIdsWithinDepth(string rootMapName, int maxDepth)
         {
+            UnityEngine.Debug.Log($"[MapLoaderFramework] GetMapIdsWithinDepth called for rootMapName={rootMapName}, maxDepth={maxDepth}");
             var result = new System.Collections.Generic.HashSet<string>();
+            if (string.IsNullOrEmpty(rootMapName))
+            {
+                UnityEngine.Debug.LogError("[MapLoaderFramework] GetMapIdsWithinDepth called with null or empty rootMapName. Returning empty set.");
+                return result;
+            }
             void Traverse(string mapName, int depth)
             {
                 if (depth >= maxDepth) return;
@@ -738,18 +764,36 @@ namespace MapLoaderFramework.Runtime
                 result.Add(mapName);
                 // Find connections
                 var mapData = loadedMapsInspector.FirstOrDefault(m => m.id == mapName);
-                if (mapData != null && mapData.connections != null)
+                if (mapData != null)
                 {
-                    foreach (var conn in mapData.connections)
+                    // Standard connections
+                    if (mapData.connections != null)
                     {
-                        if (conn != null && !string.IsNullOrEmpty(conn.mapId) && !result.Contains(conn.mapId))
+                        foreach (var conn in mapData.connections)
                         {
-                            Traverse(conn.mapId, depth + 1);
+                            if (conn != null && !string.IsNullOrEmpty(conn.mapId) && !result.Contains(conn.mapId))
+                            {
+                                UnityEngine.Debug.Log($"[MapLoaderFramework] Traverse: following connection from {mapName} to {conn.mapId}");
+                                Traverse(conn.mapId, depth + 1);
+                            }
+                        }
+                    }
+                    // Warp event destinations
+                    if (mapData.warp_events != null)
+                    {
+                        foreach (var warp in mapData.warp_events)
+                        {
+                            if (warp != null && !string.IsNullOrEmpty(warp.dest_map) && !result.Contains(warp.dest_map))
+                            {
+                                UnityEngine.Debug.Log($"[MapLoaderFramework] Traverse: following warp event from {mapName} to {warp.dest_map}");
+                                Traverse(warp.dest_map, depth + 1);
+                            }
                         }
                     }
                 }
             }
             Traverse(rootMapName, 0);
+            UnityEngine.Debug.Log($"[MapLoaderFramework] GetMapIdsWithinDepth result: {string.Join(", ", result)}");
             return result;
         }
 
@@ -758,6 +802,7 @@ namespace MapLoaderFramework.Runtime
         /// </summary>
         public void LoadMapAndDirectConnections(string mapName)
         {
+            UnityEngine.Debug.Log($"[MapLoaderFramework] LoadMapAndDirectConnections called for mapName={mapName}");
             LoadMapAndConnections(mapName, 0, 1);
             // After loading, cleanup prefabs not in the allowed set
             var allowedMapIds = GetMapIdsWithinDepth(mapName, 1);
@@ -770,15 +815,17 @@ namespace MapLoaderFramework.Runtime
                     allowed.Add(mapData.layout);
                 }
             }
+            UnityEngine.Debug.Log($"[MapLoaderFramework] Cleaning up prefabs not in allowed set: {string.Join(", ", allowed)}");
             CleanupPrefabsNotInSet(allowed);
         }
-        public event Action<string, string> OnRawJsonUpdated; // (mapId, rawJson)
+
 
         /// <summary>
         /// Allows components to subscribe to rawJson updates for a specific map id.
         /// </summary>
         public void SubscribeToRawJson(Action<string, string> callback)
         {
+            UnityEngine.Debug.Log("[MapLoaderFramework] SubscribeToRawJson called");
             OnRawJsonUpdated += callback;
         }
 
@@ -787,6 +834,7 @@ namespace MapLoaderFramework.Runtime
         /// </summary>
         public void UnsubscribeFromRawJson(Action<string, string> callback)
         {
+            UnityEngine.Debug.Log("[MapLoaderFramework] UnsubscribeFromRawJson called");
             OnRawJsonUpdated -= callback;
         }
 
@@ -795,6 +843,7 @@ namespace MapLoaderFramework.Runtime
         /// </summary>
         public string GetRawJson(string mapId)
         {
+            UnityEngine.Debug.Log($"[MapLoaderFramework] GetRawJson called for mapId={mapId}");
             var map = loadedMapsInspector.FirstOrDefault(m => m.id == mapId);
             return map?.rawJson;
         }
@@ -805,6 +854,7 @@ namespace MapLoaderFramework.Runtime
         /// </summary>
         private void OnDestroy()
         {
+            UnityEngine.Debug.Log("[MapLoaderFramework] OnDestroy called");
             if (Application.isPlaying) return;
             var thisType = this.GetType();
             var assembly = thisType.Assembly;
@@ -816,6 +866,7 @@ namespace MapLoaderFramework.Runtime
                 var comp = GetComponent(type);
                 if (comp != null)
                 {
+                    UnityEngine.Debug.Log($"[MapLoaderFramework] Destroying component {type.Name} in OnDestroy");
                     UnityEditor.Undo.DestroyObjectImmediate((Component)comp);
                 }
             }

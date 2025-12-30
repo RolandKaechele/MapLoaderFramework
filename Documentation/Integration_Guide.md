@@ -93,11 +93,27 @@ string currentRawJson = mapLoaderFrameworkInstance.GetRawJson("myMapId");
 
 ## Runtime Integration Scripts
 
-- **MapLoaderFramework.cs**: Core component that manages the framework and auto-adds all other runtime scripts to the GameObject. Provides the main entry point for map loading and connections.
-    - **Map Connection Depth:** The maximum depth for loading connected maps is configurable via the `mapConnectionDepth` field in the Inspector. This controls how many levels of connected maps are loaded recursively when you call `LoadMapAndConnections`. The default is 2, but you can adjust this value in the Inspector to suit your project needs.
+
+### Main Runtime Scripts
+
+- **MapLoaderFramework.cs**: Main loader component that manages the framework, auto-adds all other runtime scripts to the GameObject, and provides the main entry point for map loading, switching, and event notification.
+- **MapLoaderManager.cs**: Entry point for loading maps from UI or scripts. Exposes methods to load, reload, and switch maps programmatically.
+- **MapLoader.cs**: Handles standard map loading, instantiation, placement, and cleanup for direct map connections (edge-to-edge, e.g., doors, paths). Manages recursive loading of directly connected maps.
+- **MapData.cs**: Data structure representing a map (parsed from JSON), including both direct connections and warp events.
+- **MapWarpLoader.cs**: Handles all logic related to warp event maps (instantiation, placement, cleanup). Manages teleport/warp event transitions between maps.
+- **MapWarpConnection.cs**: Data structure representing a warp event connection (teleport, warp, etc.) between maps.
+- **ScriptManager.cs**: Handles loading and executing Lua scripts (MoonSharp) for map events and custom logic.
+
+> **Map Connection Depth:**
+> The maximum depth for loading connected maps is configurable via the `mapConnectionDepth` field in the Inspector of MapLoaderFramework. This controls how many levels of directly connected maps are loaded recursively when you call `LoadMapAndConnections`. The default is 2, but you can adjust this value to suit your project needs.
+
+#### Additional Utility Scripts
+
 - **AutoMapLoader.cs**: Script to automatically load a default map at scene start. Assign the default map name (the map to load first) and MapLoaderManager in the Inspector. You can customize or extend this script for your own startup logic.
 - **MapDropdownLoader.cs**: Lets you select and load maps from a Unity UI Dropdown. Assign a Dropdown and MapLoaderManager in the Inspector. **This script is initially disabled and must be enabled in the Inspector if you want to use it.**
 - **MapLoadTrigger.cs**: Allows map loading to be triggered from UI, animation, or other scripts. Call `TriggerLoad()` to load the specified map. **This script is initially disabled and must be enabled in the Inspector if you want to use it.**
+
+**Map Connection Depth:** The maximum depth for loading connected maps is configurable via the `mapConnectionDepth` field in the Inspector of MapLoaderFramework. This controls how many levels of directly connected maps are loaded recursively when you call `LoadMapAndConnections`. The default is 2, but you can adjust this value to suit your project needs.
 
 
 **Script file locations:**

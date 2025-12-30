@@ -7,17 +7,30 @@ using MoonSharp.Interpreter;
 namespace MapLoaderFramework.Runtime
 {
     /// <summary>
-    /// Loads and executes Lua scripts from the appropriate Scripts folder (Editor or persistentDataPath) in a sandboxed environment.
+    /// <b>LuaScriptLoader</b> loads and executes Lua scripts from the appropriate Scripts folder (Editor or persistentDataPath) in a sandboxed environment.
+    /// <para>
+    /// <b>Responsibilities:</b>
+    /// <list type="number">
+    /// <item>Loads all Lua scripts from disk into memory for fast access.</item>
+    /// <item>Executes Lua scripts in a sandboxed environment using MoonSharp.</item>
+    /// <item>Allows scripts to be run by filename, removed from memory, or listed for diagnostics.</item>
+    /// <item>Supports script management for both Editor and runtime environments.</item>
+    /// </list>
+    /// </para>
+    /// <para>
+    /// <b>Usage:</b> Use static methods to load, run, or remove scripts. Not a MonoBehaviour.
+    /// </para>
     /// </summary>
 	[AddComponentMenu("MapLoaderFramework/Lua Script Loader")]
     [DisallowMultipleComponent]
     public static class LuaScriptLoader
     {
+
         // In-memory storage for loaded Lua scripts: filename -> code
         private static System.Collections.Generic.Dictionary<string, string> loadedScripts = new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
  
         /// <summary>
-        /// Runs a loaded Lua script by its filename.
+        /// Runs a loaded Lua script by its filename (if present in memory).
         /// </summary>
         public static bool RunScriptByFileName(string fileName)
         {
@@ -25,6 +38,7 @@ namespace MapLoaderFramework.Runtime
             {
                 try
                 {
+                    // Run the script in a sandboxed environment
                     RunScriptSandboxed(code, fileName);
                     return true;
                 }
@@ -38,7 +52,10 @@ namespace MapLoaderFramework.Runtime
             return false;
         }
 
-        // Loads and executes all Lua scripts in the Scripts folder (sandboxed)
+        /// <summary>
+        /// Loads all Lua scripts from the Scripts folder into memory and optionally runs them (sandboxed).
+        /// </summary>
+        /// <param name="foundScripts">Optional list to populate with found script filenames.</param>
         public static void LoadAndRunAllScripts(System.Collections.Generic.IList<string> foundScripts = null)
         {
             string scriptsDir = null;
@@ -47,6 +64,7 @@ namespace MapLoaderFramework.Runtime
     #else
             scriptsDir = Path.Combine(Application.persistentDataPath, "Scripts");
     #endif
+
             if (!Directory.Exists(scriptsDir))
             {
                 Debug.Log($"[LuaScriptLoader] No Scripts directory found at {scriptsDir}");
@@ -87,12 +105,17 @@ namespace MapLoaderFramework.Runtime
             return loadedScripts.Remove(fileName);
         }
 
-        // Runs a Lua script in a sandboxed environment
+        /// <summary>
+        /// Runs a Lua script in a sandboxed environment using MoonSharp.
+        /// Only safe core modules are enabled; dangerous globals are removed.
+        /// </summary>
+        /// <param name="code">The Lua script code to execute.</param>
+        /// <param name="scriptName">Optional script name for diagnostics.</param>
         public static void RunScriptSandboxed(string code, string scriptName = "external_script.lua")
         {
             // Only allow safe core modules
             var script = new Script(CoreModules.Basic | CoreModules.Table | CoreModules.String | CoreModules.Math);
-            // Optionally, remove or restrict access to dangerous globals here
+            // Remove or restrict access to dangerous globals
             script.Globals["os"] = null;
             script.Globals["io"] = null;
             script.Globals["dofile"] = null;
