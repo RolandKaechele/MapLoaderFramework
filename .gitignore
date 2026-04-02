@@ -37,9 +37,7 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 # MapLoaderFramework
-/Assets/Editor/
-/Assets/Runtime/
-/Assets/Resources/
+/Assets/Maps/
 /Assets/InternalMaps/
 /Assets/ExternalMaps/
 /Assets/Scripts/
