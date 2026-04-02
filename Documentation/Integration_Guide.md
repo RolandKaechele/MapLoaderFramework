@@ -11,6 +11,8 @@ This guide explains how to add the MapLoaderFramework to a new or existing Unity
 - `Assets/InternalMaps/`: Internal map files (bundled with build).
 - `Assets/ExternalMaps/`: External map files (for testing user/content updates in the Editor only).
     - **In builds, user maps are loaded from** `Application.persistentDataPath/ExternalMaps` **for real modding support.**
+- `Assets/Mods/`: Mod subfolders in the Editor; in builds, mods are loaded from `Application.persistentDataPath/Mods/`.
+    - Each subfolder must contain a `mod_manifest.json` and may contain `maps/`, `scripts/`, `minigames/`, and `dlcpacks/` subfolders.
 - `Assets/MapLoaderFramework/Runtime/`: Internal framework C# scripts (do not modify).
 - `Assets/Scripts/`: Your own or mod scripts (e.g., Lua, C# for your game logic).
     - **In builds, user/mod scripts can also be loaded from** `Application.persistentDataPath/Scripts` **if your game supports runtime scripting.**
@@ -25,6 +27,7 @@ When you install or update the MapLoaderFramework package, a postinstall script 
 - `Assets/InternalMaps/`
 - `Assets/ExternalMaps/`
 - `Assets/Scripts/`
+- `Assets/Mods/`
 
 > **Note** This is handled by the `postinstall.js` script referenced in the package's `package.json`.
 
@@ -65,6 +68,49 @@ This will create all necessary folders under your project's `Assets` directory i
 6. Alternatively, you can load the initial map from your own script, UI, or event by calling `MapLoaderManager.LoadMap(mapName)`.
 7. Use the loader scripts in `MapLoaderFramework/Runtime/` to load and switch maps as needed (e.g., via UI or events).
 8. Add assets (prefabs, audio, etc.) to `Assets/Resources/` as needed.
+
+
+## Modding
+
+Mod subfolders are discovered from `Assets/Mods/` (Editor) or `Application.persistentDataPath/Mods/` (builds). Each mod must contain a `mod_manifest.json`:
+
+```json
+{
+  "mod_id": "my_extra_maps",
+  "name": "Extra Dungeon Pack",
+  "author": "Community",
+  "version": "1.0.0",
+  "description": "Adds a bonus dungeon, mini-game, and DLC pack.",
+  "enabled": true,
+  "map_files": ["extra_dungeon.json"],
+  "script_files": ["extra_events.lua"],
+  "minigame_files": ["bonus_race.json"],
+  "dlc_pack_files": ["vip_pack.json"],
+  "min_game_version": "1.0.0",
+  "dependencies": []
+}
+```
+
+Mod asset subfolders:
+
+| Subfolder | Consumed by |
+| --------- | ----------- |
+| `maps/` | `MapLoaderFramework` (via `GetEnabledModMapFiles()`) |
+| `scripts/` | `ScriptManager` (via `GetEnabledModScriptFiles()`) |
+| `minigames/` | `MiniGameManager` bridge (via `GetEnabledModMiniGameFiles()`) |
+| `dlcpacks/` | `DlcManager` bridge (via `GetEnabledModDlcPackFiles()`) |
+
+Enable/disable mods at runtime:
+
+```csharp
+mapLoaderManager.EnableMod("my_extra_maps");
+mapLoaderManager.DisableMod("my_extra_maps");
+
+foreach (var mod in mapLoaderManager.GetDiscoveredMods())
+    Debug.Log($"{mod.name} — enabled: {mod.enabled}");
+```
+
+> **MiniGameManager / DlcManager mod support** requires `MINIGAMEMANAGER_MLF` / `DLCMANAGER_MLF` defines and the matching bridge components (`MapLoaderMiniGameBridge` / `MapLoaderDlcBridge`). Enable `Reload On Mods Changed` on those bridges to auto-register mod content when mods change.
 
 
 ## Subscribing to Map Change Notifications
@@ -137,6 +183,13 @@ Assets/
 │   └── example_internal_map.json
 ├── ExternalMaps/                  # For Editor testing only (user maps)
 │   └── example_map.json
+├── Mods/                          # Mod subfolders (each with mod_manifest.json)
+│   └── my_mod/
+│       ├── mod_manifest.json
+│       ├── maps/
+│       ├── scripts/
+│       ├── minigames/
+│       └── dlcpacks/
 ├── Scripts/                       # Your own or mod scripts (Lua, C#)
 │   └── example_event.lua
 ├── MapLoaderFramework/

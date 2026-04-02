@@ -106,4 +106,78 @@ Unsubscribe when no longer needed:
 mapLoaderFrameworkInstance.UnsubscribeFromRawJson(callback);
 ```
 
+Subscribe to higher-level events for most use cases:
+
+```csharp
+// Fires on every root map change
+mapLoaderFrameworkInstance.OnMapLoaded += mapData =>
+    Debug.Log($"Loaded: {mapData.id}");
+
+// Fires only when LoadChapter() is called
+mapLoaderFrameworkInstance.OnChapterChanged += (prev, next) =>
+    Debug.Log($"Chapter {prev} → {next}");
+```
+
+
+## Bridge Pattern (Opt-In Cross-Package Integration)
+
+The framework uses a **define-guarded bridge** pattern to connect optional packages without creating hard dependencies.
+
+### How it works
+
+1. Add a scripting define in **Player Settings › Scripting Define Symbols** (e.g. `MINIGAMEMANAGER_MLF`).
+2. Attach the matching bridge MonoBehaviour to any GameObject.
+3. The bridge subscribes to framework events in `OnEnable` / unsubscribes in `OnDisable`.
+4. When the define is absent the bridge compiles to a no-op stub — no runtime cost.
+
+### Available defines & bridges (MapLoaderFramework side)
+
+| Define | Bridge | What it does |
+| ------ | ------ | ------------ |
+| `MINIGAMEMANAGER_MLF` | `MapLoaderMiniGameBridge` | Aborts active mini-game on map load; reloads mod `minigames/` on mod change |
+| `DLCMANAGER_MLF` | `MapLoaderDlcBridge` | Informational `OnDlcGatedMap` event; reloads mod `dlcpacks/` on mod change |
+| `CUTSCENEMANAGER_MLF` | `MapLoaderBridge` | Wires `TransitionCallback` to `FadeController` |
+| `AUDIOMANAGER_MLF` | `MapLoaderAudioBridge` | Crossfades BGM/ambient on `OnMapLoaded` |
+| `SAVEMANAGER_MLF` | `SaveMapBridge` | Persists `hasBeenVisited` flags and last map id |
+| `INVENTORYMANAGER_MLF` | `MapLoaderInventoryBridge` | Grants map-specific item drops on load |
+
+### Writing your own bridge
+
+```csharp
+#if MY_DEFINE
+using UnityEngine;
+using MapLoaderFramework.Runtime;
+
+[AddComponentMenu("MapLoaderFramework/Bridges/My Custom Bridge")]
+[DisallowMultipleComponent]
+public class MyCustomBridge : MonoBehaviour
+{
+    private MapLoaderFramework _mlf;
+
+    private void Awake() =>
+        _mlf = GetComponent<MapLoaderFramework>() ?? FindFirstObjectByType<MapLoaderFramework>();
+
+    private void OnEnable()  => _mlf.OnMapLoaded += OnMapLoaded;
+    private void OnDisable() => _mlf.OnMapLoaded -= OnMapLoaded;
+
+    private void OnMapLoaded(MapData map)
+    {
+        // your logic here
+    }
+}
+#else
+// No-op stub — compiles to nothing when MY_DEFINE is absent
+public sealed class MyCustomBridge : UnityEngine.MonoBehaviour { }
+#endif
+```
+
+
+## Extending Mod Support
+
+To expose a new file type to mods:
+
+1. Add a `List<string>` field (e.g. `audio_files`) to `ModManifest.cs`.
+2. Add a helper method to `ModManager.cs` following the same pattern as `GetEnabledModMiniGameFiles()`.
+3. Create a bridge component (or extend an existing one) that subscribes to `ModManager.OnModsChanged` and processes the new files.
+
 See the main README and API Reference for extension points and best practices.

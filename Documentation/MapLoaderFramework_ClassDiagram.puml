@@ -5,15 +5,57 @@
 '
 class MapLoaderFramework {
     +LoadMapAndConnections(mapName: string)
+    +LoadChapter(chapterId: int)
+    +GetMapsForChapter(chapterId: int): List<MapData>
+    +PreloadAllMaps()
     +SubscribeToRawJson(callback: Action<string, string>)
     +UnsubscribeFromRawJson(callback: Action<string, string>)
     +GetRawJson(mapId: string): string
+    +TransitionCallback: Action<string, Action>
+    +CurrentMapId: string
+    +OnMapLoaded: event Action<MapData>
+    +OnChapterChanged: event Action<int, int>
     +OnRawJsonUpdated: event Action<string, string>
 }
 
 class MapLoaderManager {
     +LoadMap(mapName: string)
+    +LoadChapter(chapterId: int)
+    +GetMapsForChapter(chapterId: int): List<MapData>
     +GetAvailableMaps(): List<string>
+    +GetDiscoveredMods(): IEnumerable<ModManifest>
+    +EnableMod(modId: string)
+    +DisableMod(modId: string)
+    +CurrentMapId: string
+    +TransitionCallback: Action<string, Action>
+    +OnMapLoaded: event Action<MapData>
+    +OnChapterChanged: event Action<int, int>
+}
+
+class ModManager {
+    +DiscoverMods()
+    +EnableMod(modId: string)
+    +DisableMod(modId: string)
+    +GetDiscoveredMods(): IEnumerable<ModManifest>
+    +GetEnabledModMapFiles(): IEnumerable<(string, string)>
+    +GetEnabledModScriptFiles(): IEnumerable<(string, string)>
+    +GetEnabledModMiniGameFiles(): IEnumerable<(string, string)>
+    +GetEnabledModDlcPackFiles(): IEnumerable<(string, string)>
+    +OnModsChanged: event Action
+}
+
+class ModManifest {
+    +mod_id: string
+    +name: string
+    +author: string
+    +version: string
+    +enabled: bool
+    +map_files: List<string>
+    +script_files: List<string>
+    +minigame_files: List<string>
+    +dlc_pack_files: List<string>
+    +min_game_version: string
+    +dependencies: List<string>
 }
 
 class AutoMapLoader {
@@ -36,7 +78,11 @@ class MapData {
     +id: string
     +name: string
     +music: string
+    +chapter_id: int
+    +is_additive: bool
+    +mod_id: string
     +items: List<Item>
+    +connections: List<MapConnection>
     +warp_events: List<MapWarpConnection>
 }
 
@@ -58,12 +104,27 @@ class ScriptManager {
     +ExecuteScript(eventName: string)
 }
 
+note bottom of ModManager
+  Fires OnModsChanged when mods are
+  enabled or disabled. Bridges subscribe
+  to this event to reload mod content.
+end note
+
+note right of MapLoaderFramework
+  Bridge components (e.g. MapLoaderMiniGameBridge,
+  MapLoaderDlcBridge, MapLoaderAudioBridge) attach
+  to the same GameObject and subscribe to
+  OnMapLoaded / OnChapterChanged via #if DEFINE guards.
+end note
+
 MapLoaderFramework <|-- MapLoaderManager
 MapLoaderManager <.. AutoMapLoader
 MapLoaderManager <.. MapDropdownLoader
 MapLoaderManager <.. MapLoadTrigger
+MapLoaderManager --> ModManager
 MapLoaderFramework --> MapData
 MapLoaderFramework --> ScriptManager
 MapLoaderFramework --> MapWarpLoader
 MapData --> MapWarpConnection
+ModManager --> ModManifest
 @enduml

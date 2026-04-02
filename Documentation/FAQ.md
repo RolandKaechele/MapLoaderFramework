@@ -33,5 +33,14 @@ A: Yes! You can:
 **Q: How do I load maps or scripts at runtime?**
 A: Place user maps in `Application.persistentDataPath/ExternalMaps` and scripts in `Application.persistentDataPath/Scripts` (for builds). The framework will automatically check these locations for user content.
 
+**Q: How does mod support work?**
+A: Drop a mod subfolder into `Assets/Mods/` (Editor) or `Application.persistentDataPath/Mods/` (build). Each mod must contain a `mod_manifest.json` that lists its asset files. Call `ModManager.DiscoverMods()` (or let `MapLoaderManager` do it on start) to register them. Enable/disable mods at runtime via `EnableMod(modId)` / `DisableMod(modId)`.
+
+**Q: Can I add mini-games or DLC packs via mods?**
+A: Yes. Place JSON definition files in the mod's `minigames/` or `dlcpacks/` subfolders and list them in `mod_manifest.json` under `minigame_files` / `dlc_pack_files`. Then enable `MINIGAMEMANAGER_MLF` / `DLCMANAGER_MLF`, attach `MapLoaderMiniGameBridge` / `MapLoaderDlcBridge`, and enable **Reload On Mods Changed** on those bridges.
+
+**Q: What is the bridge pattern?**
+A: Bridges are optional MonoBehaviour components that connect MapLoaderFramework to other packages (MiniGameManager, DlcManager, AudioManager, etc.) using `#if DEFINE` guards. They compile to no-op stubs when the define is absent, so unused integrations have zero runtime cost. See [Extending the Framework](Extending_the_Framework.md) for details.
+
 **Q: Where are the main scripts and data structures?**
 A: See the Integration Guide and API Reference for a full list and descriptions of all main runtime scripts and data structures.
