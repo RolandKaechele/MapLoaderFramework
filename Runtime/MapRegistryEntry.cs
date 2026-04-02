@@ -38,5 +38,22 @@ namespace MapLoaderFramework.Runtime
         /// True if the map has been loaded into memory (not necessarily instantiated).
         /// </summary>
         public bool isLoaded = false;
+
+        // --- mod / source tracking ---
+
+        /// <summary>
+        /// ID of the mod that provides this map entry. Empty string for base-game maps.
+        /// </summary>
+        public string modId = "";
+
+        /// <summary>
+        /// True if this map entry comes from an external (mod) source rather than InternalMaps.
+        /// </summary>
+        public bool isExternal = false;
+
+        /// <summary>
+        /// True if this map entry has been visited by the player (for save-system integration).
+        /// </summary>
+        public bool hasBeenVisited = false;
     }
 }

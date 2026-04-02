@@ -71,6 +71,39 @@ namespace MapLoaderFramework.Runtime
         private MapWarpLoader mapWarpLoader;
 
 
+        // --- game extensions ---
+
+        /// <summary>
+        /// Optional reference to the ModManager on this GameObject for mod-aware map preloading.
+        /// Resolved automatically on Awake.
+        /// </summary>
+        private ModManager modManager;
+
+        /// <summary>
+        /// Optional transition callback set by an external system (e.g. CutsceneManager).
+        /// Signature: (displayName, doLoad) — the callee must invoke doLoad() when ready.
+        /// If null, LoadChapter calls doLoad directly.
+        /// </summary>
+        public Action<string, Action> TransitionCallback;
+
+        /// <summary>
+        /// Current active chapter number. 0 = no chapter active.
+        /// </summary>
+        [SerializeField]
+        [Tooltip("Currently active chapter number (0 = none).")]
+        private int currentChapterId = 0;
+
+        /// <summary>Raised when a new chapter is started. (previousChapter, newChapter)</summary>
+        public event Action<int, int> OnChapterChanged;
+
+        /// <summary>
+        /// Raised whenever a root map finishes loading — covers direct <see cref="LoadMapAndConnections"/>
+        /// calls, <see cref="LoadChapter"/> transitions, and warp-event navigation.
+        /// Subscribe in external systems (e.g. AudioManager bridge) to react to every map change.
+        /// </summary>
+        public event Action<MapData> OnMapLoaded;
+
+
         /// <summary>
         /// Track last loaded map id to detect changes.
         /// </summary>
@@ -118,6 +151,13 @@ namespace MapLoaderFramework.Runtime
                 return;
             }
 #endif
+            // Resolve optional helpers
+            modManager = GetComponent<ModManager>();
+
+            // Subscribe to mod changes so maps are reloaded when a mod is toggled
+            if (modManager != null)
+                modManager.OnModsChanged += PreloadAllMaps;
+
             UnityEngine.Debug.Log("[MapLoaderFramework] Preloading all maps");
             PreloadAllMaps();
             foundLuaScriptsInspector.Clear();
@@ -132,6 +172,17 @@ namespace MapLoaderFramework.Runtime
         {
             UnityEngine.Debug.Log($"[MapLoaderFramework] LoadMapAndConnectionsInternal called for mapName={mapName}, currentDepth={currentDepth}, maxDepth={maxDepth}");
             LoadMapAndConnections(mapName, currentDepth, maxDepth);
+
+            // Fire OnMapLoaded for warp-event navigation (always a root-level call from MapWarpLoader)
+            if (currentDepth == 0)
+            {
+                var entry = mapRegistry.Values.FirstOrDefault(e =>
+                    System.IO.Path.GetFileNameWithoutExtension(e.filePath) == mapName);
+                string resolvedId = entry?.id ?? mapName;
+                var rootMapData = loadedMapsInspector.FirstOrDefault(m => m.id == resolvedId);
+                if (rootMapData != null)
+                    OnMapLoaded?.Invoke(rootMapData);
+            }
         }
 
         /// <summary>
@@ -270,6 +321,48 @@ namespace MapLoaderFramework.Runtime
             // Load internal maps first, then external (external can overwrite)
             LoadMapsFromDir(internalDir, false);
             LoadMapsFromDir(externalDir, true);
+
+            // Load maps from enabled mods (mod maps overwrite base-game maps that share the same id)
+            if (modManager != null)
+            {
+                foreach (var (filePath, modId) in modManager.GetEnabledModMapFiles())
+                {
+                    try
+                    {
+                        string json = System.IO.File.ReadAllText(filePath);
+                        var mapData = JsonUtility.FromJson<MapData>(json);
+                        if (mapData != null && !string.IsNullOrEmpty(mapData.id) && !string.IsNullOrEmpty(mapData.layout))
+                        {
+                            mapData.mod_id = modId;
+                            mapData.rawJson = json;
+                            var entry = new MapRegistryEntry
+                            {
+                                id = mapData.id,
+                                filePath = filePath,
+                                prefabInstantiated = false,
+                                isLoaded = false,
+                                modId = modId,
+                                isExternal = true
+                            };
+                            mapRegistry[mapData.id] = entry;
+                            var existingIdx = loadedMapsInspector.FindIndex(m => m.id == mapData.id);
+                            if (existingIdx >= 0)
+                                loadedMapsInspector[existingIdx] = mapData;
+                            else
+                                loadedMapsInspector.Add(mapData);
+                            UnityEngine.Debug.Log($"[MapLoaderFramework] Loaded mod map: {mapData.id} from mod '{modId}'");
+                        }
+                        else
+                        {
+                            UnityEngine.Debug.LogWarning($"[MapLoaderFramework] Skipping invalid mod map JSON: {filePath}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        UnityEngine.Debug.LogError($"[MapLoaderFramework] Failed to load mod map JSON: {filePath}, error: {ex.Message}");
+                    }
+                }
+            }
 
             UpdateMapRegistryInspector();
 
@@ -468,6 +561,62 @@ namespace MapLoaderFramework.Runtime
 
 
         /// <summary>
+        /// Loads all maps belonging to the given chapter, using the first chapter map as root.
+        /// Fires <see cref="OnChapterChanged"/> and optionally performs a fade transition.
+        /// </summary>
+        /// <param name="chapterId">Chapter number (1–46).</param>
+        public void LoadChapter(int chapterId)
+        {
+            if (chapterId <= 0)
+            {
+                UnityEngine.Debug.LogWarning("[MapLoaderFramework] LoadChapter called with invalid chapterId.");
+                return;
+            }
+
+            var chapterMaps = loadedMapsInspector
+                .Where(m => m.chapter_id == chapterId)
+                .ToList();
+
+            if (chapterMaps.Count == 0)
+            {
+                UnityEngine.Debug.LogWarning($"[MapLoaderFramework] No maps found for chapter {chapterId}.");
+                return;
+            }
+
+            // Use the first map of the chapter as the root entry point
+            var rootMap = chapterMaps[0];
+            int previousChapterId = currentChapterId;
+
+            void DoLoad()
+            {
+                currentChapterId = chapterId;
+                LoadMapAndConnections(rootMap.id);
+                if (previousChapterId != chapterId)
+                    OnChapterChanged?.Invoke(previousChapterId, chapterId);
+            }
+
+            if (TransitionCallback != null)
+            {
+                string displayName = string.IsNullOrEmpty(rootMap.localization_key)
+                    ? rootMap.name
+                    : rootMap.localization_key;
+                TransitionCallback(displayName, DoLoad);
+            }
+            else
+            {
+                DoLoad();
+            }
+        }
+
+        /// <summary>
+        /// Returns all <see cref="MapData"/> entries that belong to the specified chapter.
+        /// </summary>
+        public List<MapData> GetMapsForChapter(int chapterId)
+        {
+            return loadedMapsInspector.Where(m => m.chapter_id == chapterId).ToList();
+        }
+
+        /// <summary>
         /// Loads a map and its connections by name, recursively, up to <c>mapConnectionDepth</c>.
         /// Delegates instantiation and placement to <see cref="MapLoader"/> and warp event map handling to <see cref="MapWarpLoader"/>.
         /// </summary>
@@ -499,6 +648,11 @@ namespace MapLoaderFramework.Runtime
 
             UnityEngine.Debug.Log($"[MapLoaderFramework] Handling warp event maps for rootMapId={rootMapId}");
             mapWarpLoader.HandleWarpEventMaps(rootMapId, mapConnectionDepth, GetMapIdsWithinDepth);
+
+            // Notify subscribers (e.g. AudioManager) that a new root map is active
+            var rootMapData = loadedMapsInspector.FirstOrDefault(m => m.id == rootMapId);
+            if (rootMapData != null)
+                OnMapLoaded?.Invoke(rootMapData);
         }
 
         // Internal recursive version with depth control
@@ -670,11 +824,7 @@ namespace MapLoaderFramework.Runtime
 
         /// <summary>
         /// Loads and instantiates a Tiled map prefab using SuperTiled2Unity.
-        /// Looks for a prefab named after the map in Assets/InternalMaps.
-        /// <summary>
-        /// Destroys map prefabs that are not within the allowed depth from the new root map.
-        /// Only out-of-scope (exceeded depth) map prefabs are destroyed; valid ones are preserved.
-        /// Delegates prefab removal to <see cref="MapLoader"/> utility methods.
+        /// For additive maps (is_additive == true) the prefab is loaded alongside the current scene.
         /// </summary>
         /// <param name="mapName">The name of the map (without extension).</param>
         private void InstantiateTiledMap(string mapName)
@@ -703,8 +853,13 @@ namespace MapLoaderFramework.Runtime
             {
                 UnityEngine.Debug.Log($"[MapLoaderFramework] Successfully loaded prefab from Resources/{prefabPathInternal}");
             }
-            // Instantiate the prefab at origin and parent it to this GameObject
-            var instance = Instantiate(prefab, Vector3.zero, Quaternion.identity, this.transform);
+            // For additive maps, do not re-parent under this manager object;
+            // they sit alongside the active scene. Non-additive maps are children of this GameObject.
+            var mapEntry = loadedMapsInspector.FirstOrDefault(m => m.layout == mapName);
+            bool isAdditive = mapEntry != null && mapEntry.is_additive;
+            Transform parentTransform = isAdditive ? null : this.transform;
+
+            var instance = Instantiate(prefab, Vector3.zero, Quaternion.identity, parentTransform);
             UnityEngine.Debug.Log($"[MapLoaderFramework] Instantiated Tiled map prefab: {mapName} (parent: {this.gameObject.name}), instance name: {instance.name}, activeInHierarchy: {instance.activeInHierarchy}, scene: {instance.scene.name}");
             // Diagnostic: List all children of this GameObject after instantiation
             LogAllChildrenOfThisGameObject();

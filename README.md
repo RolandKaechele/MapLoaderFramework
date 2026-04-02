@@ -1,132 +1,288 @@
-# MapLoaderFramework Documentation
+# MapLoaderFramework
 
-MapLoaderFramework is a modular Unity framework for loading, managing, and integrating 2D map data (TMX maps support) extensible workflows and easy integration into your game or application projects.
+MapLoaderFramework is a modular Unity framework for loading, managing, and integrating 2D map data (TMX/JSON). It supports dynamic map connections, warp events, Lua scripting, mod support, episodic/chapter-based loading, localization, and additive scene management — all without recompiling your game.
 
 ![Overview](Documentation/overview.png)
 
-## Installation as a Unity Plugin
+## Features
 
-You can install the MapLoaderFramework as a Unity plugin in two ways:
-
-
-**A. Import as a Unity Package (.unitypackage):**
-
-1. In Unity, go to `Assets > Import Package > Custom Package...`.
-2. Select the `MapLoaderFramework.unitypackage` file (exported from the framework project).
-3. Import all required files and folders (typically everything under `MapLoaderFramework/`).
-4. Follow the Quick Start and Integration Steps below.
-
-
-**B. Clone from Git Repository (UPM or Assets):**
-
-1. Open your Unity project folder.
-
-2. Recommended: **UPM (Unity Package Manager) via Git**
-   - This is the preferred method for most users. It allows easy updates, dependency management, and keeps your project clean.
-   - Steps:
-     1. Open `Packages/manifest.json` in your project.
-     2. Add the following line to the `dependencies` section:
-
-        ```json
-        "com.rolandkaechele.maploaderframework": "https://github.com/RolandKaechele/MapLoaderFramework.git"
-        ```
-
-     3. Save the file and Unity will fetch the package from GitHub automatically.
-
-   - **Why use UPM via Git?**
-     - Easy to update: Just change the git URL or commit hash.
-     - Keeps your Assets folder uncluttered.
-     - Supports semantic versioning and dependency resolution.
-     - Can be used with private forks or branches.
-
-3. Alternative: **Direct Clone to Assets**
-   - Use this only if you need to modify the framework directly or UPM is not suitable for your workflow.
-   - Steps:
-     1. Clone the repository directly into your `Assets/MapLoaderFramework` folder:
-
-        ```sh
-        git clone https://github.com/RolandKaechele/MapLoaderFramework.git Assets/MapLoaderFramework
-        ```
-
-     2. Unity will automatically import the scripts and assets.
-
-4. Follow the Quick Start and Integration Steps below.
+- **TMX/JSON map loading** — loads maps from `InternalMaps` (bundled) and `ExternalMaps` (runtime-writable, e.g. mods or DLC)
+- **Map connections** — edge-to-edge connections and warp/teleport events; configurable recursive depth
+- **Modding system** — drop mod folders into `Mods/`, each with a `mod_manifest.json`; enable/disable mods at runtime without recompiling
+- **Chapter / episode loading** — group maps by `chapter_id`; call `LoadChapter(n)` to load all maps for that episode
+- **Additive scene loading** — mark a map as `"is_additive": true` to load it alongside the current scene (e.g. a persistent interior)
+- **Transition callback** — assign any fade/cutscene implementation to `MapLoaderFramework.TransitionCallback`; natively integrated with [CutsceneManager](https://github.com/RolandKaechele/CutsceneManager) via `MapLoaderBridge`
+- **Localization** — embed `localized_names` arrays in map JSON for any number of languages; switch at runtime
+- **Lua scripting** — sandboxed MoonSharp Lua scripts in `Scripts/` for event-driven map logic
+- **Inspector integration** — all registries, loaded maps, warp events, and Lua scripts are visible in the Unity Inspector
 
 
-**C. Manual Copy:**
+## Installation
 
-1. Copy the entire `MapLoaderFramework/` folder (with all subfolders) into your project's `Assets/` directory (not into `Packages`).
-2. Unity will automatically import the scripts and assets.
-3. Follow the Quick Start and Integration Steps below.
+### A. UPM via Git (recommended)
 
+1. Open `Packages/manifest.json` in your project.
+2. Add to the `dependencies` section:
 
-### Automatic Folder and Template Setup
+   ```json
+   "com.rolandkaechele.maploaderframework": "https://github.com/RolandKaechele/MapLoaderFramework.git"
+   ```
 
-After installation, the `postinstall.js` script will:
+3. Save — Unity fetches the package automatically and keeps it updatable.
 
-- Ensure all required folders (Editor, Resources, InternalMaps, ExternalMaps, Scripts) exist under your project's `Assets` directory.
-- Optionally prompt you to copy template/example files from the `MapLoaderFramework/Examples` folder to your `Assets` folders. If a file already exists, you will be asked whether to overwrite it.
+### B. Clone into Assets
 
-This makes it easy to get started with example content or a clean folder structure.
-
-
-## About This Documentation
-
-This folder contains usage guides, API documentation, and integration steps for the MapLoaderFramework.
-
-### Contents
-
- - **Getting Started**: See [Integration_Guide.md](Documentation/Integration_Guide.md) for installation and quick start.
- - **Folder Structure**: See [Integration_Guide.md](Documentation/Integration_Guide.md).
- - **Example Files & Templates**: See the `Examples` folder in the package for template/example files you can copy into your project. For details, see [Example_Files.md](Documentation/Example_Files.md).
- - **API Reference**: See [API_Reference.md](Documentation/API_Reference.md) for main classes, map connection types, and data structures.
- - **Integration Steps**: See [Integration_Guide.md](Documentation/Integration_Guide.md).
- - **Extending the Framework**: See [Extending_the_Framework.md](Documentation/Extending_the_Framework.md) for custom logic, events, and scripting.
- - **HowTo: Create And Use TMX With MapLoaderFramework**: See [HowTo_Create_And_Use_TMX_With_MapLoaderFramework.md](Documentation/HowTo_Create_And_Use_TMX_With_MapLoaderFramework.md)
- - **FAQ**: See [FAQ.md](Documentation/FAQ.md) for frequently asked questions and answers about MapLoaderFramework.
-
-## Map Connections and Extensibility
-
-MapLoaderFramework supports two types of map connections:
-
-- **Direct map connections** (edge-to-edge, e.g., doors, paths) managed by MapLoader and defined in each map's JSON as `MapConnection` objects.
-- **Warp event connections** (teleports, special transitions) managed by MapWarpLoader and defined as `MapWarpConnection` objects.
-
-The maximum depth for loading directly connected maps is controlled by the `mapConnectionDepth` field in the MapLoaderFramework Inspector (default: 2).
-
-You can extend the framework by subscribing to map change notifications, adding new fields or warp event types to map JSON, and using Lua or C# scripts for custom logic. See the Integration Guide and API Reference for details.
-
-## Main Scripts and Data Structures
-
-- All core framework scripts are in `Assets/MapLoaderFramework/Runtime/`.
-- Your own or mod scripts go in `Assets/Scripts/` (Editor) or `Application.persistentDataPath/Scripts` (Build/modding).
-- See the API Reference for a full list and descriptions of all main runtime scripts and data structures.
-
-## Map Change Notification System
-
-MapLoaderFramework provides an event system for notifying other components when a map's raw JSON changes (e.g., after loading or merging internal/external maps). Components can subscribe to receive updates for any map:
-
-```csharp
-// Subscribe to rawJson updates
-mapLoaderFrameworkInstance.SubscribeToRawJson((mapId, rawJson) => {
-       Debug.Log($"Map {mapId} updated. New rawJson: {rawJson}");
-});
-
-// Unsubscribe when no longer needed
-mapLoaderFrameworkInstance.UnsubscribeFromRawJson(callback);
-
-// Get current rawJson for a map
-string currentRawJson = mapLoaderFrameworkInstance.GetRawJson("myMapId");
+```sh
+git clone https://github.com/RolandKaechele/MapLoaderFramework.git Assets/MapLoaderFramework
 ```
 
-This ensures your systems (UI, logic, etc.) are always informed of map changes.
+### C. Import as `.unitypackage`
+
+`Assets › Import Package › Custom Package…` — select the exported `.unitypackage`.
+
+### D. Manual copy
+
+Copy the `MapLoaderFramework/` folder into `Assets/`.
+
+### Post-install setup
+
+Run `postinstall.js` (Node.js required) to create the required folder structure under `Assets/`:
+
+```
+Assets/
+  InternalMaps/     ← bundled map JSON files
+  ExternalMaps/     ← runtime/modded map JSON files
+  Scripts/          ← Lua event scripts
+  Mods/             ← mod subfolders (each with mod_manifest.json)
+  Resources/
+    InternalMaps/   ← SuperTiled2Unity prefabs for internal maps
+    ExternalMaps/   ← SuperTiled2Unity prefabs for external maps
+```
 
 
-## Support & Repository
+## Quick Start
 
-Project repository: [https://github.com/RolandKaechele/MapLoaderFramework](https://github.com/RolandKaechele/MapLoaderFramework)
+1. Add an empty GameObject to your scene named `MapLoader`.
+2. Attach **MapLoaderFramework** — it auto-adds `MapLoaderManager`, `AutoMapLoader`, and other helpers.
+3. Set `defaultMapName` on `AutoMapLoader` to the id of your starting map.
+4. Place your map JSON files in `Assets/InternalMaps/` and your SuperTiled2Unity prefabs in `Assets/Resources/InternalMaps/`.
+5. Press Play.
 
+
+## Map JSON Format
+
+```json
+{
+  "id": "town_square",
+  "name": "Town Square",
+  "layout": "LAYOUT_TOWN_SQUARE",
+  "music": "town_theme",
+  "map_type": "outdoor",
+  "show_map_name": true,
+  "chapter_id": 1,
+  "gameplay_type": "exploration",
+  "is_additive": false,
+  "map_variant": "present",
+  "localization_key": "map.town_square",
+  "localized_names": [
+    { "lang": "en", "value": "Town Square" },
+    { "lang": "de", "value": "Stadtplatz" }
+  ],
+  "unlock_condition": "",
+  "mod_id": "",
+  "audio": {
+    "backgroundMusic": "town_theme.ogg",
+    "ambientSounds": ["birds.ogg", "wind.ogg"]
+  },
+  "connections": [
+    { "mapId": "cave_entrance", "direction": "down" }
+  ],
+  "warp_events": [
+    { "id": "warp_to_inn", "src_x": 5, "src_y": 3, "dest_map": "inn_interior", "dest_x": 2, "dest_y": 1 }
+  ]
+}
+```
+
+| Field | Type | Description |
+| -- | -- | -- |
+| `id` | string | Unique map identifier |
+| `layout` | string | SuperTiled2Unity prefab name (without extension) |
+| `chapter_id` | int | Groups maps into chapters/episodes; 0 = always available |
+| `gameplay_type` | string | `"exploration"`, `"combat"`, `"stealth"`, `"minigame"`, `"cutscene"`, `"space"`, `"underwater"`, `"racing"` |
+| `is_additive` | bool | Load alongside current scene instead of replacing it |
+| `map_variant` | string | `"present"`, `"past"`, `"future"` — for timeline variants |
+| `localization_key` | string | Key for external localization lookup |
+| `localized_names` | array | Inline translated name entries `{ "lang", "value" }` |
+| `unlock_condition` | string | Flag/condition that must be true to access this map |
+| `mod_id` | string | Set automatically by ModManager for mod-provided maps |
+
+
+## Modding
+
+Place mod subfolders inside `Assets/Mods/` (editor) or `Application.persistentDataPath/Mods/` (build):
+
+```
+Mods/
+  my_extra_maps/
+    mod_manifest.json
+    maps/
+      extra_dungeon.json
+    scripts/
+      extra_events.lua
+```
+
+**`mod_manifest.json` example:**
+
+```json
+{
+  "mod_id": "my_extra_maps",
+  "name": "Extra Dungeon Pack",
+  "author": "Community",
+  "version": "1.0.0",
+  "description": "Adds a bonus dungeon.",
+  "enabled": true,
+  "map_files": ["extra_dungeon.json"],
+  "script_files": ["extra_events.lua"],
+  "min_game_version": "1.0.0",
+  "dependencies": []
+}
+```
+
+Enable/disable mods at runtime via `MapLoaderManager`:
+
+```csharp
+mapLoaderManager.EnableMod("my_extra_maps");
+mapLoaderManager.DisableMod("my_extra_maps");
+
+// List all discovered mods
+foreach (var mod in mapLoaderManager.GetDiscoveredMods())
+    Debug.Log($"{mod.name} — enabled: {mod.enabled}");
+```
+
+Mod maps that share an `id` with a base-game map will overwrite it. Dependency load order is resolved automatically.
+
+
+## Chapter / Episode Loading
+
+```csharp
+// Load all maps belonging to chapter 3
+mapLoaderManager.LoadChapter(3);
+
+// Query which maps belong to a chapter
+var maps = mapLoaderManager.GetMapsForChapter(3);
+```
+
+`LoadChapter` calls `TransitionCallback(displayName, doLoad)` before swapping maps if the callback is set; otherwise the load happens immediately.
+
+Subscribe to chapter change events on `MapLoaderFramework`:
+
+```csharp
+mapLoaderFramework.OnChapterChanged += (previous, current) =>
+    Debug.Log($"Chapter {previous} → {current}");
+```
+
+
+## Fade Transitions
+
+`MapLoaderFramework` exposes a delegate that any external system can hook to drive the fade:
+
+```csharp
+// Signature:  Action<string displayName, Action doLoad>
+mapLoaderFramework.TransitionCallback = (displayName, doLoad) =>
+{
+    // fade out, show displayName, call doLoad(), fade in
+    myFader.FadeOutAndIn(onMiddle: doLoad);
+};
+```
+
+When `TransitionCallback` is not set the map swap happens immediately with no animation.
+
+### Recommended: CutsceneManager integration
+
+Install [CutsceneManager](https://github.com/RolandKaechele/CutsceneManager), add the scripting define `CUTSCENEMANAGER_MLF`, and attach `MapLoaderBridge` to any GameObject. `MapLoaderBridge.Awake()` wires `TransitionCallback` automatically using `FadeController`.
+
+### Recommended: AudioManager integration
+
+Install [AudioManager](https://github.com/RolandKaechele/AudioManager), add the scripting define `AUDIOMANAGER_MLF`, and attach `MapLoaderAudioBridge` to any GameObject. It subscribes to `OnMapLoaded` and automatically crossfades to each map's `audio.backgroundMusic` and `audio.ambientSounds`.
+
+`OnMapLoaded` fires on every root map change — including `LoadChapter()`, direct `LoadMap()` calls, and warp-event navigation:
+
+```csharp
+mapLoaderFramework.OnMapLoaded += mapData =>
+    Debug.Log($"Map loaded: {mapData.id}, BGM: {mapData.audio?.backgroundMusic}");
+```
+
+## Map Change Notifications
+
+### Chapter events
+
+```csharp
+mapLoaderFramework.OnChapterChanged += (previous, current) =>
+    Debug.Log($"Chapter {previous} → {current}");
+```
+
+`OnChapterChanged` fires only when `LoadChapter()` is called.
+
+### Map load events
+
+```csharp
+mapLoaderFramework.OnMapLoaded += mapData =>
+    Debug.Log($"Map loaded: {mapData.id}");
+```
+
+`OnMapLoaded` fires on **every** root map change — `LoadChapter()`, direct `LoadMap()` calls, and warp-event navigation. Prefer this event for anything that needs to react to any map transition (e.g. audio changes).
+
+### Raw JSON notifications
+
+```csharp
+mapLoaderFramework.SubscribeToRawJson((mapId, rawJson) =>
+    Debug.Log($"Map {mapId} updated"));
+
+mapLoaderFramework.UnsubscribeFromRawJson(callback);
+
+string json = mapLoaderFramework.GetRawJson("town_square");
+```
+
+
+## Lua Scripting
+
+Place `.lua` files in `Assets/Scripts/` (editor) or `persistentDataPath/Scripts/` (build). Scripts are loaded and executed in a sandboxed MoonSharp environment (no `os`, `io`, `require`, or `debug` globals).
+
+Trigger a script from a GameObject:
+
+1. Attach `LuaScriptTrigger`.
+2. Set `scriptFileName` to your `.lua` filename.
+3. Call `TriggerScript()` from a UI button or event.
+
+
+## Runtime API Summary
+
+| Class | Key Methods |
+| -- | -- |
+| `MapLoaderManager` | `LoadMap(name)`, `LoadChapter(id)`, `GetMapsForChapter(id)`, `GetAvailableMaps()`, `EnableMod(id)`, `DisableMod(id)`, `GetDiscoveredMods()` |
+| `MapLoaderFramework` | `LoadMapAndConnections(name)`, `LoadChapter(id)`, `GetMapsForChapter(id)`, `PreloadAllMaps()`, `GetRawJson(id)`, `SubscribeToRawJson(cb)`, `OnChapterChanged`, `OnMapLoaded` |
+| `ModManager` | `DiscoverMods()`, `EnableMod(id)`, `DisableMod(id)`, `GetEnabledModMapFiles()`, `GetEnabledModScriptFiles()` |
+| `MapLoaderFramework` (`TransitionCallback`) | `public Action<string, Action>` — assign to drive fade-out → load → fade-in from any external system |
+| `AutoMapLoader` | Loads `defaultMapName` on Start |
+| `MapLoadTrigger` | `TriggerLoad()` — call from UI or events |
+| `MapDropdownLoader` | Populates a Dropdown with available maps |
+| `LuaScriptTrigger` | `TriggerScript()` — executes a named Lua file |
+
+
+## Documentation
+
+- [Integration Guide](Documentation/Integration_Guide.md)
+- [API Reference](Documentation/API_Reference.md)
+- [Example Files](Documentation/Example_Files.md)
+- [Extending the Framework](Documentation/Extending_the_Framework.md)
+- [HowTo: Create And Use TMX](Documentation/HowTo_Create_And_Use_TMX_With_MapLoaderFramework.md)
+- [FAQ](Documentation/FAQ.md)
+
+
+## Repository
+
+[https://github.com/RolandKaechele/MapLoaderFramework](https://github.com/RolandKaechele/MapLoaderFramework)
 
 ## License
 
-This framework is released under the MIT License.
+MIT License
