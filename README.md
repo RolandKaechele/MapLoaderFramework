@@ -174,9 +174,14 @@ var maps = mapLoaderManager.GetMapsForChapter(3);
 
 `LoadChapter` calls `TransitionCallback(displayName, doLoad)` before swapping maps if the callback is set; otherwise the load happens immediately.
 
-Subscribe to chapter change events on `MapLoaderFramework`:
+Subscribe to chapter change events on `MapLoaderManager` (or directly on `MapLoaderFramework`):
 
 ```csharp
+// Preferred: subscribe on the public facade
+mapLoaderManager.OnChapterChanged += (previous, current) =>
+    Debug.Log($"Chapter {previous} → {current}");
+
+// Alternative: subscribe on the inner component
 mapLoaderFramework.OnChapterChanged += (previous, current) =>
     Debug.Log($"Chapter {previous} → {current}");
 ```
@@ -232,6 +237,16 @@ mapLoaderFramework.OnMapLoaded += mapData =>
 
 `OnMapLoaded` fires on **every** root map change — `LoadChapter()`, direct `LoadMap()` calls, and warp-event navigation. Prefer this event for anything that needs to react to any map transition (e.g. audio changes).
 
+The currently loaded map id is also available as a property at any time:
+
+```csharp
+string currentMap = mapLoaderManager.CurrentMapId; // null until first map loads
+```
+
+### Visited map tracking
+
+`MapRegistryEntry.hasBeenVisited` is set to `true` the first time a map loads. Read it directly from the registry, or use `SaveManager.HasVisited(mapId)` when the `SAVEMANAGER_MLF` bridge is active.
+
 ### Raw JSON notifications
 
 ```csharp
@@ -257,10 +272,12 @@ Trigger a script from a GameObject:
 
 ## Runtime API Summary
 
-| Class | Key Methods |
+| Class | Key Members |
 | -- | -- |
 | `MapLoaderManager` | `LoadMap(name)`, `LoadChapter(id)`, `GetMapsForChapter(id)`, `GetAvailableMaps()`, `EnableMod(id)`, `DisableMod(id)`, `GetDiscoveredMods()` |
-| `MapLoaderFramework` | `LoadMapAndConnections(name)`, `LoadChapter(id)`, `GetMapsForChapter(id)`, `PreloadAllMaps()`, `GetRawJson(id)`, `SubscribeToRawJson(cb)`, `OnChapterChanged`, `OnMapLoaded` |
+| `MapLoaderManager` (events) | `OnChapterChanged event Action<int,int>`, `OnMapLoaded event Action<MapData>` — forwarded from `MapLoaderFramework`; subscribe here instead of reaching through to the inner component |
+| `MapLoaderManager` (properties) | `CurrentMapId` — id of the most-recently loaded root map; `TransitionCallback` property — get/set proxy to `MapLoaderFramework.TransitionCallback` |
+| `MapLoaderFramework` | `LoadMapAndConnections(name)`, `LoadChapter(id)`, `GetMapsForChapter(id)`, `PreloadAllMaps()`, `GetRawJson(id)`, `SubscribeToRawJson(cb)`, `OnChapterChanged`, `OnMapLoaded`, `CurrentMapId` |
 | `ModManager` | `DiscoverMods()`, `EnableMod(id)`, `DisableMod(id)`, `GetEnabledModMapFiles()`, `GetEnabledModScriptFiles()` |
 | `MapLoaderFramework` (`TransitionCallback`) | `public Action<string, Action>` — assign to drive fade-out → load → fade-in from any external system |
 | `AutoMapLoader` | Loads `defaultMapName` on Start |

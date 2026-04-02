@@ -109,6 +109,9 @@ namespace MapLoaderFramework.Runtime
         /// </summary>
         private string lastLoadedMapId = null;
 
+        /// <summary>The id of the most-recently loaded root map. <see langword="null"/> until the first map loads.</summary>
+        public string CurrentMapId => lastLoadedMapId;
+
 
         /// <summary>
         /// Event triggered when a map's raw JSON is updated. (mapId, rawJson)
@@ -740,6 +743,7 @@ namespace MapLoaderFramework.Runtime
                     lastLoadedMapId = mapData.id;
                 }
                 mapRegistry[mapData.id].isLoaded = true;
+                mapRegistry[mapData.id].hasBeenVisited = true;
                 // Instantiate the Tiled map prefab if not already instantiated
                 if (!mapRegistry[mapData.id].prefabInstantiated)
                 {

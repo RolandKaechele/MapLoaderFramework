@@ -34,6 +34,52 @@ namespace MapLoaderFramework.Runtime
         /// </summary>
         private ModManager modManager;
 
+        // Stored delegate references so we can cleanly unsubscribe the same instances.
+        private System.Action<int, int> _chapterChangedForwarder;
+        private System.Action<MapData>  _mapLoadedForwarder;
+
+        // -------------------------------------------------------------------------
+        // Events (forwarded from MapLoaderFramework)
+        // -------------------------------------------------------------------------
+
+        /// <summary>
+        /// Raised when a new chapter is started. Parameters: (previousChapter, newChapter).
+        /// Forwarded from <see cref="MapLoaderFramework.OnChapterChanged"/>.
+        /// </summary>
+        public event System.Action<int, int> OnChapterChanged;
+
+        /// <summary>
+        /// Raised whenever a root map finishes loading (direct load, chapter transition, or warp).
+        /// Forwarded from <see cref="MapLoaderFramework.OnMapLoaded"/>.
+        /// </summary>
+        public event System.Action<MapData> OnMapLoaded;
+
+        // -------------------------------------------------------------------------
+        // Delegates / callbacks (forwarded to MapLoaderFramework)
+        // -------------------------------------------------------------------------
+
+        /// <summary>
+        /// Optional fade-transition hook. Signature: (displayName, doLoad).
+        /// Set this before calling <see cref="LoadMap"/> or <see cref="LoadChapter"/> to wrap
+        /// map switches in a custom transition (e.g. fade-out → load → fade-in).
+        /// Forwarded to <see cref="MapLoaderFramework.TransitionCallback"/>.
+        /// </summary>
+        public System.Action<string, System.Action> TransitionCallback
+        {
+            get  => mapLoader != null ? mapLoader.TransitionCallback : null;
+            set  { if (mapLoader != null) mapLoader.TransitionCallback = value; }
+        }
+
+        // -------------------------------------------------------------------------
+        // Properties
+        // -------------------------------------------------------------------------
+
+        /// <summary>The id of the most-recently loaded root map. <see langword="null"/> until the first map loads.</summary>
+        public string CurrentMapId => mapLoader != null ? mapLoader.CurrentMapId : null;
+
+        // -------------------------------------------------------------------------
+        // Lifecycle
+        // -------------------------------------------------------------------------
 
         /// <summary>
         /// On Awake, ensure the MapLoaderFramework component is present and assign it.
@@ -44,8 +90,22 @@ namespace MapLoaderFramework.Runtime
             if (mapLoader == null)
             {
                 Debug.LogError("MapLoaderFramework component not found! Please attach MapLoaderFramework to this GameObject.");
+                return;
             }
             modManager = GetComponent<ModManager>();
+
+            _chapterChangedForwarder = (prev, next) => OnChapterChanged?.Invoke(prev, next);
+            _mapLoadedForwarder      = data          => OnMapLoaded?.Invoke(data);
+
+            mapLoader.OnChapterChanged += _chapterChangedForwarder;
+            mapLoader.OnMapLoaded      += _mapLoadedForwarder;
+        }
+
+        private void OnDestroy()
+        {
+            if (mapLoader == null) return;
+            mapLoader.OnChapterChanged -= _chapterChangedForwarder;
+            mapLoader.OnMapLoaded      -= _mapLoadedForwarder;
         }
 
 

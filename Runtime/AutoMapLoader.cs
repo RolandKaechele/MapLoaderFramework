@@ -43,7 +43,7 @@ namespace MapLoaderFramework.Runtime
                 // Fallback: find any in the scene
                 if (mapLoaderManager == null)
                 {
-                    mapLoaderManager = FindObjectOfType<MapLoaderManager>();
+                    mapLoaderManager = FindFirstObjectByType<MapLoaderManager>();
                 }
             }
             if (mapLoaderManager != null && !string.IsNullOrEmpty(defaultMapName))
