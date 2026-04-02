@@ -72,6 +72,20 @@ namespace MapLoaderFramework.Runtime
         public List<string> script_files;
 
         /// <summary>
+        /// List of mini-game JSON file names (relative to the mod's <c>minigames/</c> subfolder).
+        /// Loaded by <see cref="ModManager.GetEnabledModMiniGameFiles"/> and consumed by
+        /// <c>MiniGameManager</c> when the <c>MINIGAMEMANAGER_MLF</c> define is active.
+        /// </summary>
+        public List<string> minigame_files;
+
+        /// <summary>
+        /// List of DLC pack JSON file names (relative to the mod's <c>dlcpacks/</c> subfolder).
+        /// Loaded by <see cref="ModManager.GetEnabledModDlcPackFiles"/> and consumed by
+        /// <c>DlcManager</c> when the <c>DLCMANAGER_MLF</c> define is active.
+        /// </summary>
+        public List<string> dlc_pack_files;
+
+        /// <summary>
         /// Minimum game version required for this mod. Checked at load time against the running game version.
         /// </summary>
         public string min_game_version;

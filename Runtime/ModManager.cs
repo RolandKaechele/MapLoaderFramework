@@ -205,6 +205,46 @@ namespace MapLoaderFramework.Runtime
         }
 
         /// <summary>
+        /// Returns all mini-game JSON file paths (from each mod's <c>minigames/</c> subfolder)
+        /// provided by currently enabled mods.
+        /// </summary>
+        public IEnumerable<(string filePath, string modId)> GetEnabledModMiniGameFiles()
+        {
+            foreach (var mod in discoveredMods.Where(m => m.enabled))
+            {
+                if (mod.minigame_files == null) continue;
+                foreach (var file in mod.minigame_files)
+                {
+                    string path = Path.Combine(mod.modDirectory, "minigames", file);
+                    if (File.Exists(path))
+                        yield return (path, mod.mod_id);
+                    else
+                        Debug.LogWarning($"[ModManager] Mini-game file not found: {path}");
+                }
+            }
+        }
+
+        /// <summary>
+        /// Returns all DLC pack JSON file paths (from each mod's <c>dlcpacks/</c> subfolder)
+        /// provided by currently enabled mods.
+        /// </summary>
+        public IEnumerable<(string filePath, string modId)> GetEnabledModDlcPackFiles()
+        {
+            foreach (var mod in discoveredMods.Where(m => m.enabled))
+            {
+                if (mod.dlc_pack_files == null) continue;
+                foreach (var file in mod.dlc_pack_files)
+                {
+                    string path = Path.Combine(mod.modDirectory, "dlcpacks", file);
+                    if (File.Exists(path))
+                        yield return (path, mod.mod_id);
+                    else
+                        Debug.LogWarning($"[ModManager] DLC pack file not found: {path}");
+                }
+            }
+        }
+
+        /// <summary>
         /// Returns all Lua script file paths provided by currently enabled mods.
         /// </summary>
         public IEnumerable<(string filePath, string modId)> GetEnabledModScriptFiles()

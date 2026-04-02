@@ -129,6 +129,10 @@ Mods/
       extra_dungeon.json
     scripts/
       extra_events.lua
+    minigames/          ← NEW: MiniGameManager JSON definitions
+      bonus_race.json
+    dlcpacks/           ← NEW: DlcManager pack definitions
+      vip_pack.json
 ```
 
 **`mod_manifest.json` example:**
@@ -143,6 +147,8 @@ Mods/
   "enabled": true,
   "map_files": ["extra_dungeon.json"],
   "script_files": ["extra_events.lua"],
+  "minigame_files": ["bonus_race.json"],
+  "dlc_pack_files": ["vip_pack.json"],
   "min_game_version": "1.0.0",
   "dependencies": []
 }
@@ -278,7 +284,7 @@ Trigger a script from a GameObject:
 | `MapLoaderManager` (events) | `OnChapterChanged event Action<int,int>`, `OnMapLoaded event Action<MapData>` — forwarded from `MapLoaderFramework`; subscribe here instead of reaching through to the inner component |
 | `MapLoaderManager` (properties) | `CurrentMapId` — id of the most-recently loaded root map; `TransitionCallback` property — get/set proxy to `MapLoaderFramework.TransitionCallback` |
 | `MapLoaderFramework` | `LoadMapAndConnections(name)`, `LoadChapter(id)`, `GetMapsForChapter(id)`, `PreloadAllMaps()`, `GetRawJson(id)`, `SubscribeToRawJson(cb)`, `OnChapterChanged`, `OnMapLoaded`, `CurrentMapId` |
-| `ModManager` | `DiscoverMods()`, `EnableMod(id)`, `DisableMod(id)`, `GetEnabledModMapFiles()`, `GetEnabledModScriptFiles()` |
+| `ModManager` | `DiscoverMods()`, `EnableMod(id)`, `DisableMod(id)`, `GetEnabledModMapFiles()`, `GetEnabledModScriptFiles()`, `GetEnabledModMiniGameFiles()`, `GetEnabledModDlcPackFiles()` |
 | `MapLoaderFramework` (`TransitionCallback`) | `public Action<string, Action>` — assign to drive fade-out → load → fade-in from any external system |
 | `AutoMapLoader` | Loads `defaultMapName` on Start |
 | `MapLoadTrigger` | `TriggerLoad()` — call from UI or events |
