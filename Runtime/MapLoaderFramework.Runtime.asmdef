@@ -1,0 +1,14 @@
+﻿{
+    "name": "MapLoaderFramework.Runtime",
+    "rootNamespace": "MapLoaderFramework.Runtime",
+    "references": [],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": ["MoonSharp.Interpreter"],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

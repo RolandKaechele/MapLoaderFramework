@@ -15,6 +15,7 @@ MapLoaderFramework is a modular Unity framework for loading, managing, and integ
 - **Localization** — embed `localized_names` arrays in map JSON for any number of languages; switch at runtime
 - **Lua scripting** — sandboxed MoonSharp Lua scripts in `Scripts/` for event-driven map logic
 - **Inspector integration** — all registries, loaded maps, warp events, and Lua scripts are visible in the Unity Inspector
+- **StateManager integration** — `Loading` state is pushed at load start and popped on map loaded by StateManager's `MapLoaderBridge` (consumed via `STATEMANAGER_MLF`)
 
 
 ## Installation
