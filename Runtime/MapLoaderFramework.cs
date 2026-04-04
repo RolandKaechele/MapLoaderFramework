@@ -5,6 +5,9 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using UnityEngine;
+#if ODIN_INSPECTOR
+using Sirenix.OdinInspector;
+#endif
 
 
 namespace MapLoaderFramework.Runtime
@@ -36,7 +39,11 @@ namespace MapLoaderFramework.Runtime
     /// </summary>
 	[AddComponentMenu("MapLoaderFramework/MapLoader Framework")]
     [DisallowMultipleComponent]
+#if ODIN_INSPECTOR
+    public class MapLoaderFramework : SerializedMonoBehaviour
+#else
     public class MapLoaderFramework : MonoBehaviour
+#endif
     {
 
         // --- Static dictionary for absolute map positions (cleared on PreloadAllMaps) ---

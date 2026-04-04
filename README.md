@@ -16,6 +16,7 @@ MapLoaderFramework is a modular Unity framework for loading, managing, and integ
 - **Lua scripting** — sandboxed MoonSharp Lua scripts in `Scripts/` for event-driven map logic
 - **Inspector integration** — all registries, loaded maps, warp events, and Lua scripts are visible in the Unity Inspector
 - **StateManager integration** — `Loading` state is pushed at load start and popped on map loaded by StateManager's `MapLoaderBridge` (consumed via `STATEMANAGER_MLF`)
+- **Odin Inspector integration** — `SerializedMonoBehaviour` base for full Inspector serialization of complex types; runtime-display fields marked `[ReadOnly]` in Play Mode (activated via `ODIN_INSPECTOR`)
 
 
 ## Installation
@@ -291,6 +292,13 @@ Trigger a script from a GameObject:
 | `MapLoadTrigger` | `TriggerLoad()` — call from UI or events |
 | `MapDropdownLoader` | Populates a Dropdown with available maps |
 | `LuaScriptTrigger` | `TriggerScript()` — executes a named Lua file |
+
+
+## Optional Integrations
+
+### Odin Inspector (`ODIN_INSPECTOR`)
+
+Requires `ODIN_INSPECTOR` define and the Odin Inspector Asset Store package. MapLoaderManager inherits from `SerializedMonoBehaviour` for full Inspector serialization; runtime-display fields are marked `[ReadOnly]` in Play Mode.
 
 
 ## Documentation
