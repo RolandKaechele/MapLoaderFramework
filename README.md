@@ -16,6 +16,7 @@ MapLoaderFramework is a modular Unity framework for loading, managing, and integ
 - **Lua scripting** — sandboxed MoonSharp Lua scripts in `Scripts/` for event-driven map logic
 - **Inspector integration** — all registries, loaded maps, warp events, and Lua scripts are visible in the Unity Inspector
 - **StateManager integration** — `Loading` state is pushed at load start and popped on map loaded by StateManager's `MapLoaderBridge` (consumed via `STATEMANAGER_MLF`)
+- **DOTween Pro integration** — hooks `TransitionCallback` to wrap every map and chapter switch in a full-screen `Image.DOFade` (fade-to-black → load → fade-to-clear) (activated via `MAPLOADER_DOTWEEN`)
 - **Odin Inspector integration** — `SerializedMonoBehaviour` base for full Inspector serialization of complex types; runtime-display fields marked `[ReadOnly]` in Play Mode (activated via `ODIN_INSPECTOR`)
 
 
