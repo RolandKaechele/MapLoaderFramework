@@ -296,6 +296,30 @@ Trigger a script from a GameObject:
 
 ## Optional Integrations
 
+MapLoaderFramework does not define its own scripting symbols. Other modules activate their bridge to this package using `*_MLF` defines on their own side:
+
+| Define | Module | Effect |
+| ------ | ------ | ------ |
+| `SAVEMANAGER_MLF` | SaveManager | Auto-save on chapter change |
+| `EVENTMANAGER_MLF` | EventManager | Fire `map.loaded` / `chapter.changed` events |
+| `AUDIOMANAGER_MLF` | AudioManager | Auto-play map music/ambient |
+| `LOCALIZATIONMANAGER_MLF` | LocalizationManager | Register inline map names |
+| `DIALOGUEMANAGER_MLF` | DialogueManager | Auto-play map intro dialogue |
+| `INVENTORYMANAGER_MLF` | InventoryManager | Auto-grant map items on first visit |
+| `DLCMANAGER_MLF` | DlcManager | Gate restricted maps behind DLC |
+| `CUTSCENEMANAGER_MLF` | CutsceneManager | Fade transitions on map load |
+| `MINIGAMEMANAGER_MLF` | MiniGameManager | Abort active mini-game on map load |
+| `GAMEMANAGER_MLF` | GameManager | Load chapters via MapLoader |
+| `TITLESCREEN_MLF` | TitleScreenManager | Load gameplay scene via MapLoader |
+| `BOOTMANAGER_MLF` | BootStartupManager | Load TitleScreen via MapLoader |
+| `STATEMANAGER_MLF` | StateManager | Push/pop `Loading` state on map load |
+| `ANIMATIONMANAGER_MLF` | AnimationManager | Stop active animation on chapter change |
+| `UIMANAGER_MLF` | UiManager | Show/hide loading panel on chapter change |
+| `INPUTMANAGER_MLF` | InputManager | Block/unblock input during chapter loads |
+| `CAMERAMANAGER_MLF` | CameraManager | Reset camera to default on chapter change |
+| `AIMANAGER_MLF` | AiManager | Deregister all agents and reset alert level on chapter change |
+| `ENEMYMANAGER_MLF` | EnemyManager | Abort active wave and clear all live instances on chapter change |
+
 ### Odin Inspector (`ODIN_INSPECTOR`)
 
 Requires `ODIN_INSPECTOR` define and the Odin Inspector Asset Store package. MapLoaderManager inherits from `SerializedMonoBehaviour` for full Inspector serialization; runtime-display fields are marked `[ReadOnly]` in Play Mode.
