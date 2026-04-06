@@ -321,6 +321,9 @@ MapLoaderFramework does not define its own scripting symbols. Other modules acti
 | `CAMERAMANAGER_MLF` | CameraManager | Reset camera to default on chapter change |
 | `AIMANAGER_MLF` | AiManager | Deregister all agents and reset alert level on chapter change |
 | `ENEMYMANAGER_MLF` | EnemyManager | Abort active wave and clear all live instances on chapter change |
+| `SCENEMANAGER_MLF` | SceneManager | Auto-load `mapData.sceneId` scene on chapter change |
+| `PHYSICSMANAGER_MLF` | PhysicsManager | Activate `mapData.physicsProfileId` physics profile on chapter change |
+| `SPAWNMANAGER_MLF` | SpawnManager | DespawnAll on chapter change; auto-spawn definitions in `mapData.autoSpawnIds` |
 
 ### Odin Inspector (`ODIN_INSPECTOR`)
 

@@ -92,6 +92,26 @@ namespace MapLoaderFramework.Runtime
         /// </summary>
         public List<LocalizedString> localized_names;
 
+        // --- system integration extensions ---
+
+        /// <summary>
+        /// SceneManager scene id to load when this map chapter begins.
+        /// Used by <c>SceneManager MapLoaderBridge</c> when <c>SCENEMANAGER_MLF</c> is defined.
+        /// </summary>
+        public string sceneId;
+
+        /// <summary>
+        /// PhysicsManager profile id to activate when this map chapter begins.
+        /// Used by <c>PhysicsManager MapLoaderBridge</c> when <c>PHYSICSMANAGER_MLF</c> is defined.
+        /// </summary>
+        public string physicsProfileId;
+
+        /// <summary>
+        /// SpawnManager definition ids to auto-spawn when this map chapter begins.
+        /// Used by <c>SpawnManager MapLoaderBridge</c> when <c>SPAWNMANAGER_MLF</c> is defined.
+        /// </summary>
+        public List<string> autoSpawnIds;
+
         /// <summary>
         /// Stores the original JSON for extra fields not mapped to class members (Inspector-visible).
         /// </summary>
