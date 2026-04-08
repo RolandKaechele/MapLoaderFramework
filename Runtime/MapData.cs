@@ -113,6 +113,13 @@ namespace MapLoaderFramework.Runtime
         public List<string> autoSpawnIds;
 
         /// <summary>
+        /// ItemManager definition ids to auto-spawn as world pickups when this map loads.
+        /// Used by <c>ItemManager MapLoaderBridge</c> when <c>ITEMMANAGER_MLF</c> is defined.
+        /// These are merged with definitions that already list this map's id in their <c>mapIds</c> array.
+        /// </summary>
+        public List<string> autoItemIds;
+
+        /// <summary>
         /// Stores the original JSON for extra fields not mapped to class members (Inspector-visible).
         /// </summary>
         [TextArea(10, 10)]
