@@ -1,8 +1,9 @@
-﻿{
+{
     "name": "MapLoaderFramework.Runtime",
     "rootNamespace": "MapLoaderFramework.Runtime",
     "references": [
-        "MoonSharp.Interpreter"
+        "MoonSharp.Interpreter",
+        "UnityEngine.UI"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

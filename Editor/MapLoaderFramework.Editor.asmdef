@@ -1,8 +1,9 @@
-﻿{
+{
     "name": "MapLoaderFramework.Editor",
     "rootNamespace": "MapLoaderFramework.Editor",
     "references": [
-        "MapLoaderFramework.Runtime"
+        "MapLoaderFramework.Runtime",
+        "UnityEngine.UI"
     ],
     "includePlatforms": [
         "Editor"
